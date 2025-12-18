@@ -1,13 +1,134 @@
 import { useEditorStore } from './state/useEditorStore';
+import { useEffect } from 'react';
 
-const webSafeFonts = [
-  'Arial',
-  'Georgia',
-  'Times New Roman',
-  'Courier New',
-  'Verdana',
-  'Impact',
+// Comprehensive font list organized by category
+const fontCategories = {
+  'Sans Serif': [
+    'Arial',
+    'Helvetica',
+    'Verdana',
+    'Tahoma',
+    'Trebuchet MS',
+    'Segoe UI',
+    'Open Sans',
+    'Roboto',
+    'Lato',
+    'Montserrat',
+    'Poppins',
+    'Nunito',
+    'Raleway',
+    'Inter',
+    'Source Sans Pro',
+    'Ubuntu',
+    'Oswald',
+    'Quicksand',
+    'Rubik',
+    'Work Sans',
+    'Fira Sans',
+    'Barlow',
+    'DM Sans',
+    'Manrope',
+    'Outfit',
+  ],
+  'Serif': [
+    'Times New Roman',
+    'Georgia',
+    'Palatino Linotype',
+    'Book Antiqua',
+    'Garamond',
+    'Playfair Display',
+    'Merriweather',
+    'Lora',
+    'PT Serif',
+    'Noto Serif',
+    'Libre Baskerville',
+    'Crimson Text',
+    'Bitter',
+    'Cormorant Garamond',
+    'EB Garamond',
+    'Spectral',
+    'Source Serif Pro',
+  ],
+  'Display': [
+    'Impact',
+    'Anton',
+    'Bebas Neue',
+    'Righteous',
+    'Alfa Slab One',
+    'Russo One',
+    'Black Ops One',
+    'Bangers',
+    'Bungee',
+    'Permanent Marker',
+    'Orbitron',
+    'Press Start 2P',
+    'Audiowide',
+    'Racing Sans One',
+    'Teko',
+    'Kanit',
+    'Staatliches',
+    'Bowlby One SC',
+  ],
+  'Handwriting': [
+    'Comic Sans MS',
+    'Brush Script MT',
+    'Pacifico',
+    'Dancing Script',
+    'Satisfy',
+    'Caveat',
+    'Indie Flower',
+    'Sacramento',
+    'Great Vibes',
+    'Kaushan Script',
+    'Lobster',
+    'Lobster Two',
+    'Courgette',
+    'Cookie',
+    'Allura',
+    'Alex Brush',
+  ],
+  'Monospace': [
+    'Courier New',
+    'Consolas',
+    'Monaco',
+    'Lucida Console',
+    'Roboto Mono',
+    'Source Code Pro',
+    'Fira Code',
+    'JetBrains Mono',
+    'IBM Plex Mono',
+    'Space Mono',
+    'Inconsolata',
+  ],
+};
+
+// Google Fonts that need to be loaded
+const googleFonts = [
+  'Open Sans', 'Roboto', 'Lato', 'Montserrat', 'Poppins', 'Nunito', 'Raleway', 'Inter',
+  'Source Sans Pro', 'Ubuntu', 'Oswald', 'Quicksand', 'Rubik', 'Work Sans', 'Fira Sans',
+  'Barlow', 'DM Sans', 'Manrope', 'Outfit', 'Playfair Display', 'Merriweather', 'Lora',
+  'PT Serif', 'Noto Serif', 'Libre Baskerville', 'Crimson Text', 'Bitter', 'Cormorant Garamond',
+  'EB Garamond', 'Spectral', 'Source Serif Pro', 'Anton', 'Bebas Neue', 'Righteous',
+  'Alfa Slab One', 'Russo One', 'Black Ops One', 'Bangers', 'Bungee', 'Permanent Marker',
+  'Orbitron', 'Press Start 2P', 'Audiowide', 'Racing Sans One', 'Teko', 'Kanit', 'Staatliches',
+  'Bowlby One SC', 'Pacifico', 'Dancing Script', 'Satisfy', 'Caveat', 'Indie Flower',
+  'Sacramento', 'Great Vibes', 'Kaushan Script', 'Lobster', 'Lobster Two', 'Courgette',
+  'Cookie', 'Allura', 'Alex Brush', 'Roboto Mono', 'Source Code Pro', 'Fira Code',
+  'JetBrains Mono', 'IBM Plex Mono', 'Space Mono', 'Inconsolata',
 ];
+
+// Function to load Google Fonts
+const loadGoogleFonts = () => {
+  const link = document.getElementById('google-fonts-link');
+  if (!link) {
+    const fontFamilies = googleFonts.map(f => f.replace(/ /g, '+')).join('&family=');
+    const linkElement = document.createElement('link');
+    linkElement.id = 'google-fonts-link';
+    linkElement.rel = 'stylesheet';
+    linkElement.href = `https://fonts.googleapis.com/css2?family=${fontFamilies}&display=swap`;
+    document.head.appendChild(linkElement);
+  }
+};
 
 // Fill settings component (only shows Fill Color)
 const FillSettingsPanel = () => {
@@ -245,6 +366,11 @@ const BrushSettingsPanel = () => {
 
 export const PropertiesPanel = () => {
   const { layers, selectedLayerId, updateLayer, activeTool } = useEditorStore();
+  
+  // Load Google Fonts on mount
+  useEffect(() => {
+    loadGoogleFonts();
+  }, []);
 
   const selectedLayer = layers.find((l) => l.id === selectedLayerId);
   const showBrushSettings = activeTool === 'brush' || activeTool === 'eraser';
@@ -433,13 +559,25 @@ export const PropertiesPanel = () => {
                   value={selectedLayer.fontFamily}
                   onChange={(e) => updateProperty('fontFamily', e.target.value)}
                   className="w-full px-3 py-2 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg text-sm text-tesla-light focus:outline-none focus:ring-2 focus:ring-tesla-red/50 focus:border-tesla-red/50 transition-all"
+                  style={{ fontFamily: selectedLayer.fontFamily }}
                 >
-                  {webSafeFonts.map((font) => (
-                    <option key={font} value={font}>
-                      {font}
-                    </option>
+                  {Object.entries(fontCategories).map(([category, fonts]) => (
+                    <optgroup key={category} label={category}>
+                      {fonts.map((font) => (
+                        <option key={font} value={font} style={{ fontFamily: font }}>
+                          {font}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
+                {/* Font preview */}
+                <div 
+                  className="mt-2 p-3 bg-tesla-black/40 rounded-lg text-center text-tesla-light"
+                  style={{ fontFamily: selectedLayer.fontFamily, fontSize: '18px' }}
+                >
+                  {selectedLayer.fontFamily}
+                </div>
               </div>
               <div>
                 <label className="block text-xs font-medium text-tesla-gray mb-1.5">Color</label>
