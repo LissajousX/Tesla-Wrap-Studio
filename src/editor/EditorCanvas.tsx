@@ -10,8 +10,10 @@ import { TextureLayer } from './components/layers/TextureLayer';
 import { BrushLayer } from './components/layers/BrushLayer';
 import { LineLayer } from './components/layers/LineLayer';
 import { StarLayer } from './components/layers/StarLayer';
+import { FillLayer } from './components/layers/FillLayer';
 import { TransformerWrapper } from './components/TransformerWrapper';
 import { BrushTool } from './components/BrushTool';
+import { FillTool } from './components/FillTool';
 import { CheckerboardPattern } from './components/CheckerboardPattern';
 import { loadImage } from '../utils/image';
 import { carModels } from '../data/carModels';
@@ -416,6 +418,16 @@ export const EditorCanvas = forwardRef<StageType | null, EditorCanvasProps>(({ o
             <Group>
               {[...layers].reverse().map((layer) => {
                 const isBrushLayer = layer.type === 'brush';
+                const isFillLayer = layer.type === 'fill';
+                const isFillToolActive = activeTool === 'fill';
+                
+                // When fill tool is active, make fill layers non-interactive so clicks pass through
+                const fillLayerProps = isFillToolActive && isFillLayer ? {
+                  onClick: undefined,
+                  onTap: undefined,
+                  listening: false,
+                } : {};
+                
                 const commonProps = {
                   id: layer.id,
                   onClick: (e: any) => handleLayerClick(e, layer.id),
@@ -424,7 +436,8 @@ export const EditorCanvas = forwardRef<StageType | null, EditorCanvasProps>(({ o
                   onDragEnd: isBrushLayer ? undefined : (e: any) => handleDragEnd(e, layer.id),
                   onTransformStart: isBrushLayer ? undefined : (e: any) => handleTransformStart(e, layer.id),
                   onTransformEnd: isBrushLayer ? undefined : (e: any) => handleTransformEnd(e, layer.id),
-                  draggable: !layer.locked && !isBrushLayer,
+                  draggable: !layer.locked && !isBrushLayer && !isFillToolActive,
+                  ...fillLayerProps,
                 };
 
                 switch (layer.type) {
@@ -444,6 +457,8 @@ export const EditorCanvas = forwardRef<StageType | null, EditorCanvasProps>(({ o
                     return <RectLayer key={layer.id} layer={layer} {...commonProps} />;
                   case 'circle':
                     return <CircleLayer key={layer.id} layer={layer} {...commonProps} />;
+                  case 'fill':
+                    return <FillLayer key={layer.id} layer={layer} {...commonProps} />;
                   default:
                     return null;
                 }
@@ -458,6 +473,7 @@ export const EditorCanvas = forwardRef<StageType | null, EditorCanvasProps>(({ o
           </Layer>
           </Stage>
           <BrushTool stageRef={stageRef} />
+          <FillTool stageRef={stageRef} />
         </div>
       </div>
 

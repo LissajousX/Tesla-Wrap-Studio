@@ -256,6 +256,7 @@ export const BrushTool = ({ stageRef }: BrushToolProps) => {
           'star': 'Star',
           'image': 'Image',
           'texture': 'Texture',
+          'fill': 'Fill',
         };
         return typeMap[type] || 'Layer';
       };
@@ -456,6 +457,9 @@ export const BrushTool = ({ stageRef }: BrushToolProps) => {
             };
             input.click();
           }
+          break;
+        case 'f':
+          setActiveTool('fill');
           break;
         case '[':
           setBrushSettings({ size: Math.max(1, brushSettings.size - 5) });

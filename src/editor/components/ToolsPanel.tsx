@@ -12,6 +12,7 @@ import {
   Star,
   Image as ImageIcon,
   Layers,
+  PaintBucket,
 } from 'lucide-react';
 
 export const ToolsPanel = () => {
@@ -27,6 +28,7 @@ export const ToolsPanel = () => {
       'star': 'Star',
       'image': 'Image',
       'texture': 'Texture',
+      'fill': 'Fill',
     };
     return typeMap[type] || 'Layer';
   };
@@ -65,6 +67,12 @@ export const ToolsPanel = () => {
       label: 'Text Tool',
       shortcut: 'T',
       icon: <Type className="w-5 h-5" />,
+    },
+    {
+      id: 'fill',
+      label: 'Fill Tool',
+      shortcut: 'F',
+      icon: <PaintBucket className="w-5 h-5" />,
     },
     {
       id: 'rectangle',

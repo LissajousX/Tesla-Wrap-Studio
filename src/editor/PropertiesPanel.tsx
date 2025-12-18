@@ -9,14 +9,51 @@ const webSafeFonts = [
   'Impact',
 ];
 
-// Brush settings component
-const BrushSettingsPanel = () => {
-  const { activeTool, brushSettings, setBrushSettings } = useEditorStore();
+// Fill settings component (only shows Fill Color)
+const FillSettingsPanel = () => {
+  const { brushSettings, setBrushSettings } = useEditorStore();
   
   return (
     <div className="space-y-4">
       <h3 className="text-xs font-semibold text-tesla-gray uppercase tracking-wider">
-        {activeTool === 'eraser' ? 'Eraser' : 'Brush'} Settings
+        Fill Settings
+      </h3>
+      
+      {/* Fill Color */}
+      <div>
+        <label className="block text-xs font-medium text-tesla-gray mb-1.5">Fill Color</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={brushSettings.color}
+            onChange={(e) => setBrushSettings({ color: e.target.value })}
+            className="h-10 w-16 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg cursor-pointer"
+          />
+          <input
+            type="text"
+            value={brushSettings.color}
+            onChange={(e) => setBrushSettings({ color: e.target.value })}
+            className="flex-1 px-3 py-2 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg text-sm text-tesla-light"
+          />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Brush settings component
+const BrushSettingsPanel = () => {
+  const { activeTool, brushSettings, setBrushSettings } = useEditorStore();
+  
+  const getToolTitle = () => {
+    if (activeTool === 'eraser') return 'Eraser';
+    return 'Brush';
+  };
+  
+  return (
+    <div className="space-y-4">
+      <h3 className="text-xs font-semibold text-tesla-gray uppercase tracking-wider">
+        {getToolTitle()} Settings
       </h3>
       
       {/* Size */}
@@ -151,10 +188,11 @@ const BrushSettingsPanel = () => {
 };
 
 export const PropertiesPanel = () => {
-  const { layers, selectedLayerId, updateLayer, baseColor, setBaseColor, activeTool } = useEditorStore();
+  const { layers, selectedLayerId, updateLayer, activeTool } = useEditorStore();
 
   const selectedLayer = layers.find((l) => l.id === selectedLayerId);
   const showBrushSettings = activeTool === 'brush' || activeTool === 'eraser';
+  const showFillSettings = activeTool === 'fill';
 
   if (!selectedLayer) {
     return (
@@ -168,7 +206,9 @@ export const PropertiesPanel = () => {
           </h2>
         </div>
         <div className="flex-1 overflow-y-auto p-4 scrollbar-thin">
-          {showBrushSettings ? (
+          {showFillSettings ? (
+            <FillSettingsPanel />
+          ) : showBrushSettings ? (
             <BrushSettingsPanel />
           ) : (
             <div className="flex items-center justify-center h-full">
@@ -201,12 +241,42 @@ export const PropertiesPanel = () => {
           <div className="text-sm text-tesla-gray mt-1 truncate">{selectedLayer.name}</div>
         </div>
       <div className="flex-1 overflow-y-auto p-4 space-y-6 scrollbar-thin">
-        {/* Brush Settings (shown when brush or eraser tool is active) */}
-        {showBrushSettings && (
-          <BrushSettingsPanel />
-        )}
-        {/* Common Properties */}
-        <div>
+        {/* Fill Layer Properties (only Fill Color when Fill layer is selected) */}
+        {selectedLayer.type === 'fill' ? (
+          <div>
+            <h3 className="text-xs font-semibold mb-3 text-tesla-gray uppercase tracking-wider">Fill</h3>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-medium text-tesla-gray mb-1.5">Fill Color</label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={selectedLayer.fill}
+                    onChange={(e) => updateProperty('fill', e.target.value)}
+                    className="h-10 w-16 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    value={selectedLayer.fill}
+                    onChange={(e) => updateProperty('fill', e.target.value)}
+                    className="flex-1 px-3 py-2 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg text-sm text-tesla-light"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {/* Fill Settings (shown when fill tool is active, but no layer selected) */}
+            {showFillSettings && (
+              <FillSettingsPanel />
+            )}
+            {/* Brush Settings (shown when brush or eraser tool is active) */}
+            {showBrushSettings && (
+              <BrushSettingsPanel />
+            )}
+            {/* Common Properties */}
+            <div>
           <h3 className="text-xs font-semibold mb-3 text-tesla-gray uppercase tracking-wider">Common</h3>
           <div className="space-y-3">
             <div>
@@ -667,27 +737,9 @@ export const PropertiesPanel = () => {
             </div>
           </div>
         )}
+          </>
+        )}
       </div>
-
-      {/* Base Car Color */}
-      <div className="p-4 border-t border-tesla-dark/30">
-        <h3 className="text-xs font-semibold mb-3 text-tesla-gray uppercase tracking-wider">Base Color</h3>
-        <div className="flex items-center gap-3">
-          <input
-            type="color"
-            value={baseColor}
-            onChange={(e) => setBaseColor(e.target.value)}
-            className="h-10 w-16 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg cursor-pointer"
-          />
-          <input
-            type="text"
-            value={baseColor}
-            onChange={(e) => setBaseColor(e.target.value)}
-            className="flex-1 px-3 py-2 bg-tesla-black/60 border border-tesla-dark/50 rounded-lg text-sm text-tesla-light focus:outline-none focus:ring-2 focus:ring-tesla-red/50 focus:border-tesla-red/50 transition-all"
-          />
-        </div>
-      </div>
-
     </div>
   );
 };
