@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { useEditorStore } from './state/useEditorStore';
 import logo from '../assets/logo.png';
 import { exportPng } from '../utils/exportPng';
@@ -6,6 +6,8 @@ import { carModels } from '../data/carModels';
 import { saveProjectToFile, loadProjectFromFile, getProjectFileAccept } from '../utils/projectFile';
 import { NewProjectDialog } from './components/NewProjectDialog';
 import { ConfirmDialog } from './components/ConfirmDialog';
+import { DownloadDialog } from './components/DownloadDialog';
+import { InfoDialog } from './components/InfoDialog';
 import type { Stage as StageType } from 'konva/lib/Stage';
 
 interface ToolbarProps {
@@ -19,7 +21,11 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
   const projectNameInputRef = useRef<HTMLInputElement>(null);
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
+  const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
+  const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
+  const [isInfoDropdownOpen, setIsInfoDropdownOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<'new' | 'open' | null>(null);
+  const infoDropdownRef = useRef<HTMLDivElement>(null);
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
   const [editingName, setEditingName] = useState('');
   
@@ -52,13 +58,22 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
   };
 
   const handleExport = () => {
+    setIsDownloadDialogOpen(true);
+  };
+
+  const handleConfirmDownload = () => {
+    setIsDownloadDialogOpen(false);
     if (stageRef.current) {
       exportPng(stageRef.current, getExportFilename());
     }
   };
 
+  const handleCancelDownload = () => {
+    setIsDownloadDialogOpen(false);
+  };
+
   // Project name editing handlers
-  const handleProjectNameDoubleClick = () => {
+  const handleProjectNameClick = () => {
     setEditingName(projectName);
     setIsEditingProjectName(true);
     // Focus the input after state update
@@ -152,6 +167,29 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
     e.target.value = '';
   };
 
+  // Handle info dropdown menu items
+  const handleShowInstallInstructions = () => {
+    setIsInfoDropdownOpen(false);
+    setIsInfoDialogOpen(true);
+  };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (infoDropdownRef.current && !infoDropdownRef.current.contains(event.target as Node)) {
+        setIsInfoDropdownOpen(false);
+      }
+    };
+
+    if (isInfoDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isInfoDropdownOpen]);
+
   // Handle image file selection (for adding image layers)
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -196,35 +234,35 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
 
   return (
     <>
-      <div className="panel border-b-0 rounded-xl p-3 flex items-center gap-3 flex-wrap shadow-lg">
+      <div className="panel border-b-0 rounded-xl p-2 sm:p-3 flex items-center gap-2 sm:gap-3 shadow-lg relative z-[100]">
         {/* Logo */}
-        <div className="flex items-center gap-3 border-r border-tesla-dark/50 pr-3">
+        <div className="flex items-center gap-2 sm:gap-3 border-r border-tesla-dark/50 pr-2 sm:pr-3 flex-shrink-0">
           <img
             src={logo}
             alt="Tesla Wrap Studio"
-            className="h-8 w-auto drop-shadow"
+            className="h-6 sm:h-8 w-auto drop-shadow"
           />
         </div>
 
         {/* File Operations */}
-        <div className="flex items-center gap-1 border-r border-tesla-dark/50 pr-3">
+        <div className="flex items-center gap-1 border-r border-tesla-dark/50 pr-2 sm:pr-3 flex-shrink-0">
           <button
             onClick={handleNewProject}
-            className="px-3 py-1.5 text-xs font-medium text-tesla-light bg-tesla-black/70 rounded hover:bg-tesla-black transition-colors"
+            className="px-2 sm:px-3 py-1.5 text-xs font-medium text-tesla-light bg-tesla-black/70 rounded hover:bg-tesla-black transition-colors"
             title="New Project"
           >
             New
           </button>
           <button
             onClick={handleOpenProject}
-            className="px-3 py-1.5 text-xs font-medium text-tesla-light bg-tesla-black/70 rounded hover:bg-tesla-black transition-colors"
+            className="px-2 sm:px-3 py-1.5 text-xs font-medium text-tesla-light bg-tesla-black/70 rounded hover:bg-tesla-black transition-colors"
             title="Open Project (.twrap)"
           >
             Open
           </button>
           <button
             onClick={handleSaveProject}
-            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
+            className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors ${
               isDirty 
                 ? 'text-white bg-tesla-red hover:bg-tesla-red/80' 
                 : 'text-tesla-light bg-tesla-black/70 hover:bg-tesla-black'
@@ -251,7 +289,7 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
         </div>
 
         {/* Undo/Redo */}
-        <div className="flex items-center gap-1.5 border-r border-tesla-dark/50 pr-3">
+        <div className="flex items-center gap-1 sm:gap-1.5 border-r border-tesla-dark/50 pr-2 sm:pr-3 flex-shrink-0">
           <button
             onClick={undo}
             disabled={!canUndo}
@@ -275,7 +313,7 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
         </div>
 
         {/* Project Info */}
-        <div className="flex items-center gap-2 text-sm text-tesla-gray">
+        <div className="flex items-center gap-1 sm:gap-2 text-xs sm:text-sm text-tesla-gray flex-shrink min-w-0 overflow-hidden">
           {isEditingProjectName ? (
             <input
               ref={projectNameInputRef}
@@ -284,43 +322,94 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
               onChange={handleProjectNameChange}
               onBlur={handleProjectNameBlur}
               onKeyDown={handleProjectNameKeyDown}
-              className="px-2 py-0.5 text-sm font-medium text-tesla-light bg-tesla-black/80 border border-tesla-red/50 rounded outline-none focus:ring-1 focus:ring-tesla-red/50 max-w-[200px]"
+              className="px-2 py-0.5 text-xs sm:text-sm font-medium text-tesla-light bg-tesla-black/80 border border-tesla-red/50 rounded outline-none focus:ring-1 focus:ring-tesla-red/50 max-w-[120px] sm:max-w-[200px]"
               autoFocus
             />
           ) : (
             <span 
-              className="text-tesla-light font-medium truncate max-w-[150px] cursor-pointer hover:text-white transition-colors"
-              title={`${projectName} (double-click to edit)`}
-              onDoubleClick={handleProjectNameDoubleClick}
+              className="text-tesla-light font-medium truncate cursor-pointer hover:text-white transition-colors flex-shrink-0"
+              title={`${projectName} (click to edit)`}
+              onClick={handleProjectNameClick}
             >
               {projectName}
             </span>
           )}
-          <span className="text-tesla-dark">•</span>
-          <span className="text-tesla-gray">{currentModel.name}</span>
+          <span className="text-tesla-dark hidden xl:inline">•</span>
+          <span className="text-tesla-gray whitespace-nowrap hidden xl:inline">{currentModel.name}</span>
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 ml-auto">
+        <div className="flex items-center gap-1 sm:gap-2 ml-auto flex-shrink-0">
+          <div className="relative z-[100]" ref={infoDropdownRef}>
+            <button
+              onClick={() => setIsInfoDropdownOpen(!isInfoDropdownOpen)}
+              className="btn-icon"
+              title="Information and support"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+            
+            {/* Dropdown Menu */}
+            {isInfoDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-[#1c1c1e] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-[100]">
+                <button
+                  onClick={handleShowInstallInstructions}
+                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors flex items-center gap-3"
+                >
+                  <svg className="w-4 h-4 text-tesla-red flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Install Wrap on Tesla</span>
+                </button>
+                <a
+                  href="https://buymeacoffee.com/dtschannen"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsInfoDropdownOpen(false)}
+                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors flex items-center gap-3"
+                >
+                  <svg className="w-4 h-4 text-tesla-red flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
+                  </svg>
+                  <span>Buy me a Coffee</span>
+                </a>
+                <a
+                  href="https://github.com/dtschannen/Tesla-Wrap-Studio"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setIsInfoDropdownOpen(false)}
+                  className="w-full px-4 py-3 text-left text-sm text-white hover:bg-white/5 transition-colors flex items-center gap-3"
+                >
+                  <svg className="w-4 h-4 text-tesla-red flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <span>Help / Support</span>
+                </a>
+              </div>
+            )}
+          </div>
           <button
             onClick={onOpen3DPreview}
             disabled
-            className="btn-secondary flex items-center gap-2 opacity-50 cursor-not-allowed"
+            className="btn-secondary flex items-center gap-1 sm:gap-2 opacity-50 cursor-not-allowed px-2 sm:px-4"
+            title="3D Preview – Coming Soon"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
-            <span>3D Preview – Coming Soon</span>
+            <span className="hidden sm:inline">3D Preview – Coming Soon</span>
           </button>
           <button
             onClick={handleExport}
-            className="btn-primary flex items-center gap-2"
+            className="btn-primary flex items-center gap-1 sm:gap-2 px-2 sm:px-4"
             title="Export PNG"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
             </svg>
-            <span>Export PNG</span>
+            <span className="hidden sm:inline">Export PNG</span>
           </button>
         </div>
       </div>
@@ -341,6 +430,19 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
         variant="warning"
         onConfirm={handleConfirmDiscard}
         onCancel={handleCancelDiscard}
+      />
+
+      {/* Download Confirmation Dialog */}
+      <DownloadDialog
+        isOpen={isDownloadDialogOpen}
+        onConfirm={handleConfirmDownload}
+        onCancel={handleCancelDownload}
+      />
+
+      {/* Info Dialog */}
+      <InfoDialog
+        isOpen={isInfoDialogOpen}
+        onClose={() => setIsInfoDialogOpen(false)}
       />
     </>
   );
