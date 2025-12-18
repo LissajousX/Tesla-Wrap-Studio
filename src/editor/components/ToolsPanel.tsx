@@ -233,7 +233,7 @@ export const ToolsPanel = () => {
   return (
     <div className="h-full panel rounded-l-xl flex flex-col w-16 overflow-x-hidden">
       {/* Tool Buttons */}
-      <div className="flex-1 p-1.5 space-y-1 overflow-y-auto">
+      <div className="flex-1 p-1.5 space-y-1 overflow-y-auto overflow-x-hidden">
         {tools.map((tool) => (
           <button
             key={tool.id}
