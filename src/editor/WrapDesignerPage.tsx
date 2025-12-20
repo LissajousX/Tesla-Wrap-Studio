@@ -7,6 +7,7 @@ import { LayersPanel } from './LayersPanel';
 import { PropertiesPanel } from './PropertiesPanel';
 import { ThreeViewer } from '../viewer/ThreeViewer';
 import { NewProjectDialog } from './components/NewProjectDialog';
+import { UnsavedChangesDialog } from './components/UnsavedChangesDialog';
 import { useEditorStore } from './state/useEditorStore';
 import { useAuth } from '../contexts/AuthContext';
 import { loadProjectFromSupabase } from '../utils/supabaseProjects';
@@ -20,9 +21,11 @@ export const WrapDesignerPage = () => {
   const [manualZoom, setManualZoom] = useState(1);
   const [autoFitZoom, setAutoFitZoom] = useState(1);
   const [autoFit, setAutoFit] = useState(true);
-  const { selectedLayerId, deleteLayer, undo, redo, updateLayer, layers, loadProject, setDesignId } = useEditorStore();
+  const { selectedLayerId, deleteLayer, undo, redo, updateLayer, layers, loadProject, setDesignId, isDirty } = useEditorStore();
   const { user, loading: authLoading } = useAuth();
   const [loadingDesign, setLoadingDesign] = useState(false);
+  const [pendingDesignId, setPendingDesignId] = useState<string | null>(null);
+  const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
 
   // Initialize auto-fit zoom (will be calculated by EditorCanvas when autoFit is true)
   // This is just for initial state, actual calculation happens in EditorCanvas
@@ -40,6 +43,13 @@ export const WrapDesignerPage = () => {
 
       // Priority 1: Load from URL parameter (editing existing design from Gallery)
       if (designId && user) {
+        // Check for unsaved changes
+        if (isDirty) {
+          setPendingDesignId(designId);
+          setShowUnsavedChangesDialog(true);
+          return;
+        }
+
         setLoadingDesign(true);
         try {
           const project = await loadProjectFromSupabase(designId);
@@ -80,7 +90,59 @@ export const WrapDesignerPage = () => {
     if (!authLoading) {
       loadProjectOnMount();
     }
-  }, [user, authLoading, loadProject, setDesignId]);
+  }, [user, authLoading, loadProject, setDesignId, isDirty]);
+
+  // Handle unsaved changes dialog actions for URL-based loading
+  const handleUnsavedSaveForUrl = async () => {
+    setShowUnsavedChangesDialog(false);
+    // User needs to save manually - we can't auto-save here
+    // Just proceed with loading after they save
+    if (pendingDesignId) {
+      setLoadingDesign(true);
+      try {
+        const project = await loadProjectFromSupabase(pendingDesignId);
+        await loadProject(project);
+        setDesignId(pendingDesignId);
+        setShowNewProjectDialog(false);
+        window.history.replaceState({}, '', window.location.pathname);
+        clearSavedProject();
+      } catch (error: any) {
+        console.error('Failed to load design from URL:', error);
+        alert(error.message || 'Failed to load design. Please try again.');
+      } finally {
+        setLoadingDesign(false);
+        setPendingDesignId(null);
+      }
+    }
+  };
+
+  const handleUnsavedDiscardForUrl = async () => {
+    setShowUnsavedChangesDialog(false);
+    if (pendingDesignId) {
+      setLoadingDesign(true);
+      try {
+        const project = await loadProjectFromSupabase(pendingDesignId);
+        await loadProject(project);
+        setDesignId(pendingDesignId);
+        setShowNewProjectDialog(false);
+        window.history.replaceState({}, '', window.location.pathname);
+        clearSavedProject();
+      } catch (error: any) {
+        console.error('Failed to load design from URL:', error);
+        alert(error.message || 'Failed to load design. Please try again.');
+      } finally {
+        setLoadingDesign(false);
+        setPendingDesignId(null);
+      }
+    }
+  };
+
+  const handleUnsavedCancelForUrl = () => {
+    setShowUnsavedChangesDialog(false);
+    setPendingDesignId(null);
+    // Clean URL since we're not loading
+    window.history.replaceState({}, '', window.location.pathname);
+  };
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -211,6 +273,12 @@ export const WrapDesignerPage = () => {
       <NewProjectDialog
         isOpen={showNewProjectDialog}
         onClose={() => setShowNewProjectDialog(false)}
+      />
+      <UnsavedChangesDialog
+        isOpen={showUnsavedChangesDialog}
+        onSave={handleUnsavedSaveForUrl}
+        onDiscard={handleUnsavedDiscardForUrl}
+        onCancel={handleUnsavedCancelForUrl}
       />
     </div>
   );

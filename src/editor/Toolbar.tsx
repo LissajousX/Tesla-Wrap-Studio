@@ -6,11 +6,15 @@ import { carModels } from '../data/carModels';
 import { loadProjectFromFile, getProjectFileAccept } from '../utils/projectFile';
 import { calculateImageScale } from '../utils/image';
 import { NewProjectDialog } from './components/NewProjectDialog';
-import { ConfirmDialog } from './components/ConfirmDialog';
 import { DownloadDialog } from './components/DownloadDialog';
 import { InfoDialog } from './components/InfoDialog';
 import { OpenProjectDialog } from './components/OpenProjectDialog';
 import { FeatureDevelopmentDialog } from './components/FeatureDevelopmentDialog';
+import { SaveDialog } from './components/SaveDialog';
+import { UnsavedChangesDialog } from './components/UnsavedChangesDialog';
+import { ProfileMenu } from '../components/ProfileMenu';
+import { useAuth } from '../contexts/AuthContext';
+import { LoginDialog } from '../components/LoginDialog';
 import type { Stage as StageType } from 'konva/lib/Stage';
 
 interface ToolbarProps {
@@ -23,16 +27,20 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const projectNameInputRef = useRef<HTMLInputElement>(null);
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
   const [isInfoDropdownOpen, setIsInfoDropdownOpen] = useState(false);
   const [isOpenProjectDialogOpen, setIsOpenProjectDialogOpen] = useState(false);
   const [isFeatureDevelopmentDialogOpen, setIsFeatureDevelopmentDialogOpen] = useState(false);
+  const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isLoginDialogOpen, setIsLoginDialogOpen] = useState(false);
+  const [isUnsavedChangesDialogOpen, setIsUnsavedChangesDialogOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<'new' | 'open' | null>(null);
+  const [pendingSaveCallback, setPendingSaveCallback] = useState<(() => void) | null>(null);
   const infoDropdownRef = useRef<HTMLDivElement>(null);
   const [isEditingProjectName, setIsEditingProjectName] = useState(false);
   const [editingName, setEditingName] = useState('');
+  const { user } = useAuth();
   
   const {
     undo,
@@ -110,7 +118,7 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
   const handleNewProject = () => {
     if (isDirty) {
       setPendingAction('new');
-      setIsConfirmDialogOpen(true);
+      setIsUnsavedChangesDialogOpen(true);
     } else {
       setIsNewProjectDialogOpen(true);
     }
@@ -118,8 +126,49 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
 
   // Handle Open Project button
   const handleOpenProject = () => {
-    // Show feature development dialog
-    setIsFeatureDevelopmentDialogOpen(true);
+    if (isDirty) {
+      setPendingAction('open');
+      setIsUnsavedChangesDialogOpen(true);
+    } else {
+      setIsOpenProjectDialogOpen(true);
+    }
+  };
+
+  // Handle unsaved changes dialog actions
+  const handleUnsavedSave = async () => {
+    setIsUnsavedChangesDialogOpen(false);
+    if (!user) {
+      setIsLoginDialogOpen(true);
+      setPendingSaveCallback(() => {
+        setIsUnsavedChangesDialogOpen(true);
+      });
+      return;
+    }
+    setIsSaveDialogOpen(true);
+    setPendingSaveCallback(() => {
+      // After save completes, proceed with pending action
+      if (pendingAction === 'new') {
+        setIsNewProjectDialogOpen(true);
+      } else if (pendingAction === 'open') {
+        setIsOpenProjectDialogOpen(true);
+      }
+      setPendingAction(null);
+    });
+  };
+
+  const handleUnsavedDiscard = () => {
+    setIsUnsavedChangesDialogOpen(false);
+    if (pendingAction === 'new') {
+      setIsNewProjectDialogOpen(true);
+    } else if (pendingAction === 'open') {
+      setIsOpenProjectDialogOpen(true);
+    }
+    setPendingAction(null);
+  };
+
+  const handleUnsavedCancel = () => {
+    setIsUnsavedChangesDialogOpen(false);
+    setPendingAction(null);
   };
 
   const handleOpenLocalFileClick = () => {
@@ -132,25 +181,16 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
 
   // Handle Save Project
   const handleSaveProject = () => {
-    // Show feature development dialog
-    setIsFeatureDevelopmentDialogOpen(true);
-  };
-
-  // Handle confirmation dialog actions
-  const handleConfirmDiscard = () => {
-    setIsConfirmDialogOpen(false);
-    if (pendingAction === 'new') {
-      setIsNewProjectDialogOpen(true);
-    } else if (pendingAction === 'open') {
-      setIsOpenProjectDialogOpen(true);
+    // Check if user is authenticated
+    if (!user) {
+      setIsLoginDialogOpen(true);
+      return;
     }
-    setPendingAction(null);
+    
+    // Show save dialog
+    setIsSaveDialogOpen(true);
   };
 
-  const handleCancelDiscard = () => {
-    setIsConfirmDialogOpen(false);
-    setPendingAction(null);
-  };
 
   // Handle project file selection
   const handleProjectFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -404,12 +444,12 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
             onClick={onOpen3DPreview}
             disabled
             className="btn-secondary flex items-center gap-1 sm:gap-2 opacity-50 cursor-not-allowed px-2 sm:px-4"
-            title="3D Preview – Coming Soon"
+            title="Coming Soon"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
-            <span className="hidden sm:inline">3D Preview – Coming Soon</span>
+            <span className="hidden sm:inline">3D Preview</span>
           </button>
           <button
             onClick={handleExport}
@@ -421,6 +461,8 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
             </svg>
             <span className="hidden sm:inline">Export PNG</span>
           </button>
+            {/* Profile Menu (far right) */}
+            <ProfileMenu />
         </div>
       </div>
 
@@ -430,16 +472,12 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
         onClose={() => setIsNewProjectDialogOpen(false)} 
       />
 
-      {/* Unsaved Changes Confirmation Dialog */}
-      <ConfirmDialog
-        isOpen={isConfirmDialogOpen}
-        title="Unsaved Changes"
-        message="You have unsaved changes. Do you want to discard them and continue?"
-        confirmText="Discard Changes"
-        cancelText="Cancel"
-        variant="warning"
-        onConfirm={handleConfirmDiscard}
-        onCancel={handleCancelDiscard}
+      {/* Unsaved Changes Dialog */}
+      <UnsavedChangesDialog
+        isOpen={isUnsavedChangesDialogOpen}
+        onSave={handleUnsavedSave}
+        onDiscard={handleUnsavedDiscard}
+        onCancel={handleUnsavedCancel}
       />
 
       {/* Download Confirmation Dialog */}
@@ -466,6 +504,37 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
       <FeatureDevelopmentDialog
         isOpen={isFeatureDevelopmentDialogOpen}
         onClose={() => setIsFeatureDevelopmentDialogOpen(false)}
+      />
+
+      {/* Save Dialog */}
+      <SaveDialog
+        isOpen={isSaveDialogOpen}
+        onClose={() => {
+          setIsSaveDialogOpen(false);
+          if (pendingSaveCallback) {
+            pendingSaveCallback();
+            setPendingSaveCallback(null);
+          }
+        }}
+        onSuccess={() => {
+          setIsSaveDialogOpen(false);
+          if (pendingSaveCallback) {
+            pendingSaveCallback();
+            setPendingSaveCallback(null);
+          }
+        }}
+        stageRef={stageRef}
+      />
+
+      {/* Login Dialog */}
+      <LoginDialog
+        isOpen={isLoginDialogOpen}
+        onClose={() => setIsLoginDialogOpen(false)}
+        onSuccess={() => {
+          setIsLoginDialogOpen(false);
+          // After login, show save dialog
+          setIsSaveDialogOpen(true);
+        }}
       />
     </>
   );

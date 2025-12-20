@@ -16,6 +16,8 @@
     "@dnd-kit/utilities": "^3.2.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.39.3",
     "framer-motion": "^12.23.26",
     "jszip": "^3.10.1",
     "konva": "^10.0.12",
@@ -26,8 +28,7 @@
     "three": "^0.182.0",
     "three-stdlib": "^2.36.1",
     "uuid": "^13.0.0",
-    "zustand": "^5.0.9",
-    "@supabase/supabase-js": "^2.39.3"
+    "zustand": "^5.0.9"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

@@ -65,6 +65,7 @@ export interface ImageLayer extends BaseLayer {
   cropY?: number;
   cropWidth?: number;
   cropHeight?: number;
+  useTemplateMask?: boolean;  // When true, the image is masked by the template
 }
 
 export interface RectLayer extends BaseLayer {

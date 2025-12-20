@@ -758,7 +758,7 @@ export const PropertiesPanel = () => {
         {selectedLayer.type === 'image' && (
           <div>
             <h3 className="text-xs font-semibold mb-3 text-tesla-gray uppercase tracking-wider">Image</h3>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <div className="text-xs text-tesla-gray bg-tesla-black/40 p-3 rounded-lg">
                 <div className="font-medium text-tesla-light mb-1">File</div>
                 <div className="truncate">{selectedLayer.name}</div>
@@ -769,6 +769,31 @@ export const PropertiesPanel = () => {
                   <div>{selectedLayer.image.width} × {selectedLayer.image.height}px</div>
                 </div>
               )}
+              <div className="pt-2 border-t border-tesla-dark/30">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <input
+                    type="checkbox"
+                    checked={selectedLayer.useTemplateMask || false}
+                    onChange={(e) => updateProperty('useTemplateMask', e.target.checked)}
+                    className="w-4 h-4 rounded border-tesla-dark/50 bg-tesla-black/60 text-tesla-red focus:ring-tesla-red/50 focus:ring-offset-0"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-sm text-tesla-light group-hover:text-white transition-colors">
+                      Use Template Mask
+                    </span>
+                    <span className="text-xs text-tesla-dark">
+                      Clip image to vehicle template shape
+                    </span>
+                  </div>
+                </label>
+                {selectedLayer.useTemplateMask && (
+                  <div className="mt-2 p-2 bg-tesla-dark/20 rounded-lg border border-tesla-dark/30">
+                    <p className="text-xs text-tesla-gray">
+                      <span className="text-yellow-500">💡</span> Transform handles disabled. Use position/scale controls above to adjust the image.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
