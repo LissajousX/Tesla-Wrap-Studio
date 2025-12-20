@@ -6,7 +6,6 @@ import { carModels } from '../data/carModels';
 import { loadProjectFromFile, getProjectFileAccept } from '../utils/projectFile';
 import { calculateImageScale } from '../utils/image';
 import { NewProjectDialog } from './components/NewProjectDialog';
-import { ConfirmDialog } from './components/ConfirmDialog';
 import { DownloadDialog } from './components/DownloadDialog';
 import { InfoDialog } from './components/InfoDialog';
 import { OpenProjectDialog } from './components/OpenProjectDialog';
@@ -28,7 +27,6 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
   const projectFileInputRef = useRef<HTMLInputElement>(null);
   const projectNameInputRef = useRef<HTMLInputElement>(null);
   const [isNewProjectDialogOpen, setIsNewProjectDialogOpen] = useState(false);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isDownloadDialogOpen, setIsDownloadDialogOpen] = useState(false);
   const [isInfoDialogOpen, setIsInfoDialogOpen] = useState(false);
   const [isInfoDropdownOpen, setIsInfoDropdownOpen] = useState(false);
