@@ -185,7 +185,7 @@ const LayerItem = ({ layer }: LayerItemProps) => {
 };
 
 export const LayersPanel = () => {
-  const { layers, reorderLayers, currentModelId, baseColor, setBaseColor } = useEditorStore();
+  const { layers, reorderLayers, currentModelId, baseColor, setBaseColor, setSelection } = useEditorStore();
   const currentModel = carModels.find((m) => m.id === currentModelId) || carModels[0];
 
   const sensors = useSensors(
@@ -194,6 +194,12 @@ export const LayersPanel = () => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const handleDragStart = (event: any) => {
+    const { active } = event;
+    // Automatically select the layer when dragging starts
+    setSelection(active.id);
+  };
 
   const handleDragEnd = (event: any) => {
     const { active, over } = event;
@@ -219,6 +225,7 @@ export const LayersPanel = () => {
         <DndContext
           sensors={sensors}
           collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
         >
           <SortableContext

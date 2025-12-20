@@ -12,9 +12,38 @@ export const BrushTool = ({ stageRef }: BrushToolProps) => {
   const isDrawing = useRef(false);
   const currentPoints = useRef<number[]>([]);
   const currentLayerId = useRef<string | null>(null);
+  const previousTool = useRef<string | null>(null);
+  const brushLayerSelectedWhileActive = useRef<string | null>(null);
   
   // Subscribe to activeTool reactively so the effect re-runs when tool changes
   const activeTool = useEditorStore((state) => state.activeTool);
+  const selectedLayerId = useEditorStore((state) => state.selectedLayerId);
+  
+  // Track when a brush layer is selected while brush tool is active
+  // This tracks any selection changes while the brush tool is active
+  useEffect(() => {
+    if (activeTool === 'brush') {
+      // If no layer is selected, clear tracking
+      if (!selectedLayerId) {
+        brushLayerSelectedWhileActive.current = null;
+        return;
+      }
+      
+      const state = useEditorStore.getState();
+      const selected = state.layers.find(l => l.id === selectedLayerId);
+      if (selected?.type === 'brush') {
+        // Track this brush layer as selected while brush tool is active
+        brushLayerSelectedWhileActive.current = selectedLayerId;
+        console.log('[BRUSH] Tracking brush layer for drawing:', selected.name);
+      } else {
+        // If a non-brush layer is selected, clear the tracking
+        brushLayerSelectedWhileActive.current = null;
+      }
+    } else if (activeTool !== 'brush') {
+      // Reset when brush tool is not active
+      brushLayerSelectedWhileActive.current = null;
+    }
+  }, [activeTool, selectedLayerId]);
   
   useEffect(() => {
     const stage = stageRef.current;
@@ -22,6 +51,12 @@ export const BrushTool = ({ stageRef }: BrushToolProps) => {
     
     // Only activate when brush tool is active
     if (activeTool !== 'brush') {
+      // Track previous tool
+      if (previousTool.current !== null) {
+        previousTool.current = activeTool;
+      } else {
+        previousTool.current = activeTool;
+      }
       // Reset cursor when not brush
       const container = stage.container();
       if (container) {
@@ -56,26 +91,11 @@ export const BrushTool = ({ stageRef }: BrushToolProps) => {
       return `${baseName} ${index}`;
     };
 
-    // Get or create brush layer
-    const ensureBrushLayer = (): BrushLayer | null => {
+    // Helper function to create a new brush layer
+    const createNewBrushLayer = (): BrushLayer | null => {
       const state = getState();
-      const { layers, selectedLayerId, addLayer, setSelection } = state;
+      const { addLayer } = state;
       
-      // First check if selected layer is a brush layer
-      if (selectedLayerId) {
-        const selected = layers.find(l => l.id === selectedLayerId);
-        if (selected?.type === 'brush') {
-          if (selected.locked) {
-            console.log('[BRUSH] Cannot draw on locked layer');
-            return null;
-          }
-          console.log('[BRUSH] Using selected brush layer:', selected.name);
-          return selected as BrushLayer;
-        }
-      }
-      
-      // Create a new brush layer if none exists
-      console.log('[BRUSH] Creating new brush layer');
       const brushLayer: BrushLayer = {
         type: 'brush',
         id: '', // Will be assigned by addLayer
@@ -93,16 +113,85 @@ export const BrushTool = ({ stageRef }: BrushToolProps) => {
       
       addLayer(brushLayer);
       
-      // Get the newly created layer
+      // Get the newly created layer (addLayer adds it at the beginning of the array)
       const newState = getState();
-      const newBrushLayer = newState.layers[newState.layers.length - 1] as BrushLayer;
-      if (newBrushLayer) {
-        setSelection(newBrushLayer.id);
+      const newBrushLayer = newState.layers[0] as BrushLayer;
+      if (newBrushLayer && newBrushLayer.type === 'brush') {
+        // addLayer already selects the new layer
         console.log('[BRUSH] New brush layer created:', newBrushLayer.name);
         return newBrushLayer;
       }
       
       return null;
+    };
+
+    // When brush tool becomes active, check if we should clear selection or create a new layer
+    const state = useEditorStore.getState();
+    const { selectedLayerId: currentSelectedId, layers, setSelection } = state;
+    
+    // If we just switched TO the brush tool (from a different tool)
+    const justSwitchedToBrush = previousTool.current !== null && previousTool.current !== 'brush';
+    
+    if (justSwitchedToBrush) {
+      // When switching to brush tool, clear tracking but DON'T create a layer yet
+      // Layer will be created when user starts drawing (in ensureBrushLayer)
+      brushLayerSelectedWhileActive.current = null;
+      
+      if (currentSelectedId) {
+        const selected = layers.find(l => l.id === currentSelectedId);
+        if (selected && selected.type === 'brush') {
+          // If a brush layer is already selected, mark it as selected while active
+          // so the user can continue drawing on it
+          brushLayerSelectedWhileActive.current = currentSelectedId;
+          console.log('[BRUSH] Brush tool activated with existing brush layer:', selected.name);
+        }
+      }
+    }
+    
+    // Update previous tool
+    previousTool.current = activeTool;
+
+    // Get or create brush layer
+    const ensureBrushLayer = (): BrushLayer | null => {
+      const state = getState();
+      const { layers, selectedLayerId } = state;
+      
+      // If no layer is selected at all, create a new brush layer
+      if (!selectedLayerId) {
+        console.log('[BRUSH] No layer selected, creating new brush layer');
+        const newLayer = createNewBrushLayer();
+        if (newLayer) {
+          // Mark this layer as selected while brush tool is active
+          brushLayerSelectedWhileActive.current = newLayer.id;
+        }
+        return newLayer;
+      }
+      
+      // Check if the selected layer is a brush layer that was selected while the brush tool is active
+      if (selectedLayerId && brushLayerSelectedWhileActive.current === selectedLayerId) {
+        const selected = layers.find(l => l.id === selectedLayerId);
+        if (selected?.type === 'brush') {
+          if (selected.locked) {
+            console.log('[BRUSH] Cannot draw on locked layer, creating new brush layer');
+            const newLayer = createNewBrushLayer();
+            if (newLayer) {
+              brushLayerSelectedWhileActive.current = newLayer.id;
+            }
+            return newLayer;
+          }
+          console.log('[BRUSH] Using existing brush layer:', selected.name);
+          return selected as BrushLayer;
+        }
+      }
+      
+      // If selected layer is not a brush layer or wasn't selected while brush tool is active,
+      // create a new brush layer
+      console.log('[BRUSH] Creating new brush layer (selected layer not usable for brush)');
+      const newLayer = createNewBrushLayer();
+      if (newLayer) {
+        brushLayerSelectedWhileActive.current = newLayer.id;
+      }
+      return newLayer;
     };
 
     // Get correct pointer position accounting for CSS transform

@@ -1,4 +1,5 @@
-import { Line, Group } from 'react-konva';
+import { Line, Group, Rect } from 'react-konva';
+import { useMemo } from 'react';
 import type { BrushLayer as BrushLayerType, BrushStroke } from '../../state/editorTypes';
 
 interface BrushLayerProps {
@@ -82,6 +83,43 @@ const StrokeRenderer = ({ stroke, index }: { stroke: BrushStroke; index: number 
   );
 };
 
+// Calculate bounding box of all strokes
+const calculateBoundingBox = (strokes: BrushStroke[]) => {
+  if (strokes.length === 0) {
+    return { x: 0, y: 0, width: 1, height: 1 };
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  strokes.forEach((stroke) => {
+    if (!stroke.points || stroke.points.length < 2) return;
+    
+    const halfStrokeWidth = (stroke.size || 1) / 2;
+    
+    for (let i = 0; i < stroke.points.length; i += 2) {
+      const x = stroke.points[i];
+      const y = stroke.points[i + 1];
+      
+      minX = Math.min(minX, x - halfStrokeWidth);
+      minY = Math.min(minY, y - halfStrokeWidth);
+      maxX = Math.max(maxX, x + halfStrokeWidth);
+      maxY = Math.max(maxY, y + halfStrokeWidth);
+    }
+  });
+
+  // Add some padding to ensure the hit area is slightly larger than the strokes
+  const padding = 10;
+  return {
+    x: minX - padding,
+    y: minY - padding,
+    width: (maxX - minX) + padding * 2,
+    height: (maxY - minY) + padding * 2,
+  };
+};
+
 export const BrushLayer = ({ 
   layer,
   id,
@@ -94,6 +132,9 @@ export const BrushLayer = ({
   draggable 
 }: BrushLayerProps) => {
   const strokes = layer.strokes || [];
+  
+  // Calculate bounding box for hit area
+  const boundingBox = useMemo(() => calculateBoundingBox(strokes), [strokes]);
 
   if (strokes.length === 0) {
     // Return an invisible placeholder for selection
@@ -110,11 +151,17 @@ export const BrushLayer = ({
         listening={!layer.locked}
         onClick={onClick}
         onTap={onTap}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        draggable={draggable}
       >
-        <Line
-          points={[0, 0, 1, 1]}
-          stroke="transparent"
-          strokeWidth={1}
+        <Rect
+          x={0}
+          y={0}
+          width={1}
+          height={1}
+          fill="transparent"
+          listening={true}
         />
       </Group>
     );
@@ -139,6 +186,17 @@ export const BrushLayer = ({
       onTransformEnd={onTransformEnd}
       draggable={draggable}
     >
+      {/* Transparent hit area covering the entire bounding box */}
+      <Rect
+        x={boundingBox.x}
+        y={boundingBox.y}
+        width={boundingBox.width}
+        height={boundingBox.height}
+        fill="transparent"
+        listening={true}
+        perfectDrawEnabled={false}
+      />
+      {/* Render all strokes */}
       {strokes.map((stroke, index) => (
         <StrokeRenderer key={index} stroke={stroke} index={index} />
       ))}

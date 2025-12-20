@@ -740,14 +740,15 @@ export const EditorCanvas = forwardRef<StageType | null, EditorCanvasProps>(({ o
                   onClick: (e: any) => handleLayerClick(e, layer.id),
                   onTap: (e: any) => handleLayerClick(e, layer.id),
                   onContextMenu: (e: any) => handleLayerContextMenu(e, layer.id),
-                  onDragStart: isBrushLayer ? undefined : handleDragStart,
-                  onDragMove: isBrushLayer ? undefined : handleDragMove,
-                  onDragEnd: isBrushLayer ? undefined : (e: any) => handleDragEnd(e, layer.id),
-                  // Disable transform for line layers (they use endpoint handles instead)
+                  // Enable drag handlers for brush layers when select tool is active
+                  onDragStart: (isBrushLayer && !isSelectToolActive) ? undefined : handleDragStart,
+                  onDragMove: (isBrushLayer && !isSelectToolActive) ? undefined : handleDragMove,
+                  onDragEnd: (isBrushLayer && !isSelectToolActive) ? undefined : (e: any) => handleDragEnd(e, layer.id),
+                  // Disable transform for brush and line layers (line layers use endpoint handles instead)
                   onTransformStart: (isBrushLayer || isLineLayer) ? undefined : (e: any) => handleTransformStart(e, layer.id),
                   onTransformEnd: (isBrushLayer || isLineLayer) ? undefined : (e: any) => handleTransformEnd(e, layer.id),
-                  // Only allow dragging when select tool is active
-                  draggable: isSelectToolActive && !layer.locked && !isBrushLayer && !isFillToolActive,
+                  // Allow dragging when select tool is active (including brush layers)
+                  draggable: isSelectToolActive && !layer.locked && !isFillToolActive,
                   ...fillLayerProps,
                 };
 
