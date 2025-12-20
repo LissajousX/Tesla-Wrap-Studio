@@ -9,6 +9,7 @@ export const DownloadDialog = ({
   onConfirm,
   onCancel,
 }: DownloadDialogProps) => {
+
   if (!isOpen) return null;
 
   return (
@@ -36,18 +37,25 @@ export const DownloadDialog = ({
           <p className="text-white/70 text-center text-base mb-4">
             This tool is <span className="font-semibold text-tesla-red">100% free</span>.
           </p>
-          <p className="text-white/50 text-center text-xs">
-            If you would like to support the development of this page, you can{' '}
-            <a
-              href="https://buymeacoffee.com/dtschannen"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-tesla-red hover:text-tesla-red/80 underline transition-colors"
-            >
-              buy me a coffee
-            </a>
-            .
+          <p className="text-white/50 text-center text-sm mb-4">
+            If you want to support this project, you can buy me a coffee:
           </p>
+          
+          {/* Buy Me a Coffee Button */}
+          <div className="flex justify-center mb-6">
+            <a 
+              href="https://www.buymeacoffee.com/dtschannen" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
+              <img 
+                src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" 
+                alt="Buy Me A Coffee" 
+                className="h-[60px] w-[217px]"
+              />
+            </a>
+          </div>
         </div>
         
         {/* Actions */}

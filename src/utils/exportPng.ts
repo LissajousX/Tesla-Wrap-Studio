@@ -1,6 +1,7 @@
 import type { Stage } from 'konva/lib/Stage';
 import type { Node } from 'konva/lib/Node';
 import type { Group } from 'konva/lib/Group';
+import type { Line as KonvaLine } from 'konva/lib/shapes/Line';
 
 export const exportPng = (stage: Stage | null, filename: string): void => {
   if (!stage) {
@@ -32,6 +33,18 @@ export const exportPng = (stage: Stage | null, filename: string): void => {
         elementsToHide.push({ node: group, wasVisible: group.visible() });
         group.visible(false);
       }
+    }
+  });
+
+  // Hide cyan guide lines (they have stroke="#00FFFF" or stroke="#00ffff")
+  const allLines = stage.find('Line');
+  allLines.forEach(lineNode => {
+    const line = lineNode as KonvaLine;
+    const stroke = line.stroke();
+    // Check for cyan color in various formats
+    if (stroke === '#00FFFF' || stroke === '#00ffff' || stroke === 'rgb(0, 255, 255)' || stroke === 'cyan') {
+      elementsToHide.push({ node: lineNode, wasVisible: lineNode.visible() });
+      lineNode.visible(false);
     }
   });
   
