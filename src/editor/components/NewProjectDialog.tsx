@@ -9,15 +9,15 @@ interface NewProjectDialogProps {
   onClose: () => void;
 }
 
-// Tesla factory colors only
+// Tesla factory colors only - Official Tesla paint colors
 const factoryColors = [
-  { name: 'Pearl White', color: '#F5F5F5' },
-  { name: 'Solid Black', color: '#1C1C1C' },
-  { name: 'Midnight Silver', color: '#4A4B4D' },
-  { name: 'Deep Blue', color: '#1E3A5F' },
-  { name: 'Red Multi-Coat', color: '#A12830' },
-  { name: 'Quicksilver', color: '#8C8C8C' },
-  { name: 'Midnight Cherry', color: '#4A1C2B' },
+  { name: 'Pearl White Multi-Coat', color: '#F5F5F0' },
+  { name: 'Midnight Silver Metallic', color: '#636B6F' },
+  { name: 'Deep Blue Metallic', color: '#0A1F44' },
+  { name: 'Solid Black', color: '#000000' },
+  { name: 'Red Multi-Coat', color: '#A21B1F' },
+  { name: 'Quicksilver', color: '#A6A6A6' },
+  { name: 'Midnight Cherry Red', color: '#3B0A0A' },
 ];
 
 export const NewProjectDialog = ({ isOpen, onClose }: NewProjectDialogProps) => {
@@ -62,7 +62,7 @@ export const NewProjectDialog = ({ isOpen, onClose }: NewProjectDialogProps) => 
     
     // Reset dialog state
     setSelectedModelId(null);
-    setSelectedColor('#F5F5F5');
+    setSelectedColor('#F5F5F0'); // Pearl White Multi-Coat as default
     setProjectNameLocal('');
     
     onClose();
@@ -89,6 +89,8 @@ export const NewProjectDialog = ({ isOpen, onClose }: NewProjectDialogProps) => 
           <button
             onClick={onClose}
             className="p-2 text-white/40 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            title="Close dialog"
+            aria-label="Close dialog"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
