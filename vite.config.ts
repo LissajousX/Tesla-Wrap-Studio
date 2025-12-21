@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [react()],
   // Configure asset handling for src/assets/wraps
   publicDir: false, // We're not using public dir for these assets
-  assetsInclude: ['**/*.obj'], // Include OBJ files as assets
+  assetsInclude: ['**/*.gltf', '**/*.bin'], // Include GLTF and binary files as assets
   resolve: {
     alias: {
       '@assets': resolve(__dirname, './src/assets'),

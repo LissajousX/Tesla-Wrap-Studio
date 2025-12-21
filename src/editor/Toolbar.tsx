@@ -452,15 +452,14 @@ export const Toolbar = ({ stageRef, onOpen3DPreview }: ToolbarProps) => {
           </div>
           <button
             onClick={onOpen3DPreview}
-            disabled
-            className="btn-secondary flex items-center gap-1 sm:gap-2 opacity-50 cursor-not-allowed px-2 sm:px-4 relative group"
+            className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-4 relative group"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
             </svg>
             <span className="hidden sm:inline">3D Preview</span>
             <div className="absolute right-full mr-3 px-3 py-1.5 bg-tesla-black/95 border border-tesla-dark/50 rounded-lg text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
-              Coming Soon
+              3D Preview
             </div>
           </button>
           <button
