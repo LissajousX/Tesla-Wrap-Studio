@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserCredits } from '../../utils/aiCredits';
 import type { UserCredits } from '../../utils/aiCredits';
-import { createCheckoutSession, CREDIT_PACKAGES } from '../../utils/stripe';
+import { createCheckoutSession, CREDIT_PACKAGES, setStripeNavigation } from '../../utils/stripe';
 import { X, CreditCard, Loader2 } from 'lucide-react';
 
 interface CreditPurchaseDialogProps {
@@ -71,6 +71,9 @@ export function CreditPurchaseDialog({ isOpen, onClose, onPurchaseSuccess }: Cre
       }
 
       if (url) {
+        // Set flag to bypass the "Leave site?" warning
+        setStripeNavigation(true);
+        
         // Redirect to Stripe Checkout
         window.location.href = url;
       } else {

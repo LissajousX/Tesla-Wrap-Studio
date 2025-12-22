@@ -5,7 +5,7 @@ import { loadImage } from '../../utils/image';
 import { useAuth } from '../../contexts/AuthContext';
 import { getUserCredits, deductCredit } from '../../utils/aiCredits';
 import type { UserCredits } from '../../utils/aiCredits';
-import { createCheckoutSession, CREDIT_PACKAGES, saveStripeReturnContext } from '../../utils/stripe';
+import { createCheckoutSession, CREDIT_PACKAGES, saveStripeReturnContext, setStripeNavigation } from '../../utils/stripe';
 import { saveProjectToLocalStorage, saveUIState } from '../../utils/localStorageProject';
 import { supabase } from '../../lib/supabase';
 
@@ -629,6 +629,9 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
         saveProjectToLocalStorage(project);
         saveUIState({ openDialog: 'ai', zoom: 1, autoFit: true });
         saveStripeReturnContext({ openDialog: 'ai' }, project);
+        
+        // Set flag to bypass the "Leave site?" warning
+        setStripeNavigation(true);
         
         // Redirect to Stripe Checkout
         window.location.href = url;

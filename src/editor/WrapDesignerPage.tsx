@@ -18,7 +18,7 @@ import {
   clearUIState,
   saveProjectToLocalStorage 
 } from '../utils/localStorageProject';
-import { loadStripeReturnContext } from '../utils/stripe';
+import { loadStripeReturnContext, isStripeNavigation } from '../utils/stripe';
 
 export const WrapDesignerPage = () => {
   const stageRef = useRef<StageType | null>(null);
@@ -232,6 +232,11 @@ export const WrapDesignerPage = () => {
   // Browser beforeunload warning for unsaved changes
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Skip warning if intentionally navigating to Stripe (project is saved before redirect)
+      if (isStripeNavigation()) {
+        return;
+      }
+      
       if (isDirty) {
         // Standard way to show browser's "Leave site?" dialog
         e.preventDefault();

@@ -5,6 +5,25 @@ import type { ProjectFile } from '../editor/state/useEditorStore';
 // Session storage key for Stripe return context
 const STRIPE_RETURN_CONTEXT_KEY = 'tesla_wrap_stripe_return_context';
 
+// Flag to indicate we're intentionally navigating to Stripe (bypasses unsaved changes warning)
+let isNavigatingToStripe = false;
+
+/**
+ * Check if we're currently navigating to Stripe checkout
+ * Used to bypass the beforeunload warning when intentionally leaving the page
+ */
+export function isStripeNavigation(): boolean {
+  return isNavigatingToStripe;
+}
+
+/**
+ * Set the Stripe navigation flag
+ * Call this before redirecting to Stripe to prevent the "Leave site?" warning
+ */
+export function setStripeNavigation(value: boolean): void {
+  isNavigatingToStripe = value;
+}
+
 export interface StripeReturnContext {
   openDialog: 'ai' | null;
   timestamp: number;
