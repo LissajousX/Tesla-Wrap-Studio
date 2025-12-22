@@ -1,6 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useEditorStore } from '../state/useEditorStore';
 import { loadImage } from '../../utils/image';
+import { useAuth } from '../../contexts/AuthContext';
+import { getUserCredits, deductCredit } from '../../utils/aiCredits';
+import type { UserCredits } from '../../utils/aiCredits';
+import { createCheckoutSession, CREDIT_PACKAGES } from '../../utils/stripe';
 
 // Available AI models for generation
 // All models are text-to-image - mask is applied programmatically after generation
@@ -148,11 +152,17 @@ const PROMPT_SUGGESTIONS = [
   'Geometric sharp angular precise',
 ];
 
-// LocalStorage key for API key
-const API_KEY_STORAGE_KEY = 'replicate_api_key';
-
 // Replicate API via Vite proxy (to bypass CORS)
 const REPLICATE_API_BASE = '/api/replicate';
+
+// Get API key from environment variable
+const getReplicateApiKey = () => {
+  const key = import.meta.env.VITE_REPLICATE_API_KEY;
+  if (!key) {
+    console.error('VITE_REPLICATE_API_KEY environment variable is not set');
+  }
+  return key || '';
+};
 
 interface AIGeneratorDialogProps {
   isOpen: boolean;
@@ -179,8 +189,13 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
   const [numOutputs, setNumOutputs] = useState(4);
   const [showStyleDropdown, setShowStyleDropdown] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const [apiKey, setApiKey] = useState('');
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [credits, setCredits] = useState<UserCredits | null>(null);
+  const [loadingCredits, setLoadingCredits] = useState(false);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [purchasePackageId, setPurchasePackageId] = useState<string | null>(null);
+  const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [showTopUp, setShowTopUp] = useState(false);
+  const [showNoCreditsView, setShowNoCreditsView] = useState(false);
   const [state, setState] = useState<GenerationState>({
     loading: false,
     error: null,
@@ -188,27 +203,11 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
     selectedIndex: null,
   });
 
+  const { user } = useAuth();
   const { addLayer, templateImage } = useEditorStore();
   const styleDropdownRef = useRef<HTMLDivElement>(null);
   const suggestionsRef = useRef<HTMLDivElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
-
-  // Load API key from localStorage
-  useEffect(() => {
-    const savedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
-    if (savedKey) {
-      setApiKey(savedKey);
-    } else {
-      setShowApiKeyInput(true);
-    }
-  }, []);
-
-  // Save API key to localStorage
-  const saveApiKey = (key: string) => {
-    localStorage.setItem(API_KEY_STORAGE_KEY, key);
-    setApiKey(key);
-    setShowApiKeyInput(false);
-  };
 
   // Convert template image to base64 data URL for API (used as mask)
   const templateBase64 = useMemo(() => {
@@ -260,8 +259,29 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
         images: [],
         selectedIndex: null,
       });
+      setShowNoCreditsView(false);
+      setShowTopUp(false);
     }
   }, [isOpen]);
+
+  // Fetch credits when dialog opens and user is logged in
+  useEffect(() => {
+    if (isOpen && user) {
+      setLoadingCredits(true);
+      getUserCredits(user.id)
+        .then((userCredits) => {
+          setCredits(userCredits);
+          setLoadingCredits(false);
+        })
+        .catch((error) => {
+          console.error('Error loading credits:', error);
+          setLoadingCredits(false);
+        });
+    } else if (!user) {
+      // If not logged in, close dialog
+      onClose();
+    }
+  }, [isOpen, user, onClose]);
 
   /**
    * Build a focused prompt for generating pure 2D texture patterns
@@ -414,14 +434,26 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
    * Generate designs using Replicate API via proxy
    */
   const handleGenerate = useCallback(async () => {
+    if (!user) {
+      setState(prev => ({ ...prev, error: 'Please log in to generate textures' }));
+      onClose();
+      return;
+    }
+
     if (!prompt.trim()) {
       setState(prev => ({ ...prev, error: 'Please enter a prompt' }));
       return;
     }
 
+    const apiKey = getReplicateApiKey();
     if (!apiKey) {
-      setShowApiKeyInput(true);
-      setState(prev => ({ ...prev, error: 'Please enter your Replicate API key' }));
+      setState(prev => ({ ...prev, error: 'AI service is not configured. Please contact support.' }));
+      return;
+    }
+
+    // Check if user has credits - show purchase view if none
+    if (!credits || credits.credits <= 0) {
+      setShowNoCreditsView(true);
       return;
     }
 
@@ -537,6 +569,18 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
         throw new Error('Failed to process generated images. Please try again.');
       }
 
+      // Deduct credit after successful generation
+      if (user) {
+        const creditDeducted = await deductCredit(user.id);
+        if (creditDeducted) {
+          // Refresh credits display
+          const updatedCredits = await getUserCredits(user.id);
+          setCredits(updatedCredits);
+        } else {
+          console.warn('Failed to deduct credit, but generation succeeded');
+        }
+      }
+
       setState({
         loading: false,
         error: null,
@@ -549,8 +593,7 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
       let errorMessage = 'Generation failed. Please try again.';
       if (error instanceof Error) {
         if (error.message.includes('Invalid API') || error.message.includes('401')) {
-          errorMessage = 'Invalid API key. Please check your Replicate API key.';
-          setShowApiKeyInput(true);
+          errorMessage = 'AI service authentication failed. Please contact support.';
         } else if (error.message.includes('rate limit')) {
           errorMessage = 'Rate limit reached. Please wait a moment and try again.';
         } else {
@@ -564,7 +607,7 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
         error: errorMessage,
       }));
     }
-  }, [prompt, style, numOutputs, apiKey, applyMask, templateBase64]);
+  }, [prompt, style, numOutputs, applyMask, templateBase64, user, credits, onClose]);
 
   /**
    * Add selected image as a texture layer
@@ -609,6 +652,65 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
     setShowSuggestions(false);
   };
 
+  // Handle direct purchase from inline packages
+  const handlePurchase = async (packageId: string) => {
+    if (!user) {
+      setPurchaseError('Please log in to purchase credits');
+      return;
+    }
+
+    setPurchaseLoading(true);
+    setPurchasePackageId(packageId);
+    setPurchaseError(null);
+
+    try {
+      const { url, error: checkoutError } = await createCheckoutSession(
+        user.id,
+        user.email || '',
+        packageId
+      );
+
+      if (checkoutError) {
+        setPurchaseError(checkoutError);
+        setPurchaseLoading(false);
+        setPurchasePackageId(null);
+        return;
+      }
+
+      if (url) {
+        // Redirect to Stripe Checkout
+        window.location.href = url;
+      } else {
+        setPurchaseError('Failed to create checkout session');
+        setPurchaseLoading(false);
+        setPurchasePackageId(null);
+      }
+    } catch (err) {
+      console.error('Purchase error:', err);
+      setPurchaseError('An error occurred. Please try again.');
+      setPurchaseLoading(false);
+      setPurchasePackageId(null);
+    }
+  };
+
+  // Check for payment success/cancel on mount (after Stripe redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentStatus = params.get('payment');
+    
+    if (paymentStatus === 'success') {
+      // Clear the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+      // Refresh credits
+      if (user) {
+        getUserCredits(user.id).then(setCredits);
+      }
+    } else if (paymentStatus === 'cancelled') {
+      // Clear the URL parameter
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, [user]);
+
   if (!isOpen) return null;
 
   return (
@@ -631,6 +733,13 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
             </svg>
             <h2 className="text-base font-medium text-white">AI Texture Generator</h2>
+            {loadingCredits ? (
+              <span className="text-xs text-white/40">Loading...</span>
+            ) : credits !== null ? (
+              <span className={`text-xs font-medium ${credits.credits > 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                {credits.credits} credit{credits.credits !== 1 ? 's' : ''}
+              </span>
+            ) : null}
           </div>
           <button
             onClick={() => !state.loading && onClose()}
@@ -645,148 +754,128 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
           </button>
         </div>
 
-        <div className="p-5 space-y-4">
-          {/* API Key Input */}
-          {showApiKeyInput && (
-            <div className="p-4 rounded-lg bg-white/[0.03] border border-white/[0.08]">
-              <label className="block text-sm font-medium text-white/80 mb-1.5">
-                Replicate API Key
-              </label>
-              <p className="text-xs text-white/40 mb-3">
-                Get your key from{' '}
-                <a 
-                  href="https://replicate.com/account/api-tokens" 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className="text-blue-400 hover:text-blue-300"
-                >
-                  replicate.com
-                </a>
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  placeholder="r8_xxxxxxxx..."
-                  className="flex-1 px-3 py-2 rounded-md bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/25 focus:outline-none focus:border-white/20 text-sm"
-                />
-                <button
-                  onClick={() => saveApiKey(apiKey)}
-                  disabled={!apiKey.trim()}
-                  className="px-4 py-2 rounded-md bg-white text-black font-medium text-sm hover:bg-white/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                >
-                  Save
-                </button>
+        {/* Show purchase UI when no credits (either initially or after trying to generate) */}
+        {!loadingCredits && (showNoCreditsView || (credits !== null && credits.credits === 0 && state.images.length === 0)) ? (
+          <div className="p-5 space-y-5">
+            {/* No Credits Message */}
+            <div className="text-center py-4">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-yellow-500/10 flex items-center justify-center">
+                <svg className="w-6 h-6 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
               </div>
-              {apiKey && (
+              <h3 className="text-white font-medium mb-1">No Credits Remaining</h3>
+              <p className="text-white/50 text-sm">Purchase credits to generate AI textures</p>
+            </div>
+
+            {/* Purchase Error */}
+            {purchaseError && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs text-red-400 flex-1">{purchaseError}</p>
+              </div>
+            )}
+
+            {/* Credit Packages - Direct to Stripe */}
+            <div className="space-y-2" data-purchase-section>
+              {CREDIT_PACKAGES.map((pkg) => (
                 <button
-                  onClick={() => setShowApiKeyInput(false)}
-                  className="mt-2 text-xs text-white/40 hover:text-white/60"
+                  key={pkg.id}
+                  onClick={() => handlePurchase(pkg.id)}
+                  disabled={purchaseLoading}
+                  className={`w-full p-3 rounded-lg border-2 transition-all text-left ${
+                    pkg.popular
+                      ? 'border-blue-500 bg-blue-500/10'
+                      : 'border-white/[0.08] bg-white/[0.02] hover:border-white/20'
+                  } ${purchaseLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.01]'}`}
                 >
-                  Cancel
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-white font-medium">{pkg.credits} credits</span>
+                        {pkg.popular && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-medium bg-blue-500 text-white rounded">
+                            BEST
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-white/40 mt-0.5">
+                        ${(pkg.price / pkg.credits).toFixed(2)} per credit
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {purchaseLoading && purchasePackageId === pkg.id ? (
+                        <svg className="w-4 h-4 text-white/50 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                      ) : (
+                        <span className="text-lg font-semibold text-white">${pkg.price}</span>
+                      )}
+                    </div>
+                  </div>
                 </button>
-              )}
+              ))}
             </div>
-          )}
 
-          {/* Change API Key button (when key is saved) */}
-          {!showApiKeyInput && apiKey && (
-            <div className="flex justify-end -mt-1 -mb-2">
-              <button
-                onClick={() => setShowApiKeyInput(true)}
-                className="text-[11px] text-white/30 hover:text-white/50"
-              >
-                Change API Key
-              </button>
-            </div>
-          )}
+            {/* Info Note */}
+            <p className="text-center text-xs text-white/40">
+              1 Credit = 1 Texture Generated
+            </p>
 
-          {/* Prompt Input */}
-          <div>
-            <label className="block text-sm font-medium text-white/70 mb-1.5">
-              Describe your texture
-            </label>
-            <div className="relative">
-              <textarea
-                value={prompt}
-                onChange={(e) => setPrompt(e.target.value)}
-                placeholder="e.g. carbon fiber weave, galaxy nebula, dragon scales..."
-                rows={2}
-                className="w-full px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/25 focus:outline-none focus:border-white/20 transition-colors resize-none text-sm"
-                maxLength={500}
-                disabled={state.loading}
-              />
-            </div>
-            
-            {/* Suggestions */}
-            <div className="relative mt-2" ref={suggestionsRef}>
-              <button
-                type="button"
-                onClick={() => setShowSuggestions(!showSuggestions)}
-                className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/60 transition-colors"
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
-                </svg>
-                <span>Ideas</span>
-                <svg className={`w-3 h-3 transition-transform ${showSuggestions ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </button>
-              
-              {showSuggestions && (
-                <div className="absolute top-full left-0 mt-1.5 w-full max-h-40 overflow-y-auto bg-[#222] border border-white/[0.08] rounded-lg shadow-xl z-50">
-                  {PROMPT_SUGGESTIONS.slice(0, 30).map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleSuggestionClick(suggestion)}
-                      className="w-full px-3 py-2 text-left text-xs text-white/60 hover:bg-white/[0.06] hover:text-white transition-colors"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
+            {/* Secure Payment Note */}
+            <div className="flex items-center justify-center gap-2 text-white/30">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <span className="text-xs">Secure payment via Stripe</span>
             </div>
           </div>
-
-          {/* Style and Variations Row */}
-          <div className="grid grid-cols-2 gap-3">
-            {/* Style Selector */}
+        ) : (
+          <div className="p-5 space-y-4">
+            {/* Prompt Input */}
             <div>
-              <label className="block text-xs font-medium text-white/50 mb-1.5">
-                Style
+              <label className="block text-sm font-medium text-white/70 mb-1.5">
+                Describe your texture
               </label>
-              <div className="relative" ref={styleDropdownRef}>
+              <div className="relative">
+                <textarea
+                  value={prompt}
+                  onChange={(e) => setPrompt(e.target.value)}
+                  placeholder="e.g. carbon fiber weave, galaxy nebula, dragon scales..."
+                  rows={2}
+                  className="w-full px-3 py-2.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white placeholder-white/25 focus:outline-none focus:border-white/20 transition-colors resize-none text-sm"
+                  maxLength={500}
+                  disabled={state.loading}
+                />
+              </div>
+              
+              {/* Suggestions */}
+              <div className="relative mt-2" ref={suggestionsRef}>
                 <button
                   type="button"
-                  onClick={() => setShowStyleDropdown(!showStyleDropdown)}
-                  className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white text-sm hover:bg-white/[0.06] transition-colors"
-                  disabled={state.loading}
+                  onClick={() => setShowSuggestions(!showSuggestions)}
+                  className="flex items-center gap-1.5 text-xs text-white/40 hover:text-white/60 transition-colors"
                 >
-                  <span>{AI_STYLE_PRESETS[style].name}</span>
-                  <svg className={`w-3.5 h-3.5 text-white/40 transition-transform ${showStyleDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                  </svg>
+                  <span>Ideas</span>
+                  <svg className={`w-3 h-3 transition-transform ${showSuggestions ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                   </svg>
                 </button>
                 
-                {showStyleDropdown && (
-                  <div className="absolute top-full left-0 mt-1 w-full bg-[#222] border border-white/[0.08] rounded-lg shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto">
-                    {(Object.keys(AI_STYLE_PRESETS) as AIStylePreset[]).map((key) => (
+                {showSuggestions && (
+                  <div className="absolute top-full left-0 mt-1.5 w-full max-h-40 overflow-y-auto bg-[#222] border border-white/[0.08] rounded-lg shadow-xl z-50">
+                    {PROMPT_SUGGESTIONS.slice(0, 30).map((suggestion, index) => (
                       <button
-                        key={key}
-                        onClick={() => {
-                          setStyle(key);
-                          setShowStyleDropdown(false);
-                        }}
-                        className={`w-full px-3 py-2 text-left transition-colors ${
-                          style === key 
-                            ? 'bg-white/[0.08] text-white' 
-                            : 'text-white/60 hover:bg-white/[0.04] hover:text-white'
-                        }`}
+                        key={index}
+                        onClick={() => handleSuggestionClick(suggestion)}
+                        className="w-full px-3 py-2 text-left text-xs text-white/60 hover:bg-white/[0.06] hover:text-white transition-colors"
                       >
-                        <div className="text-sm">{AI_STYLE_PRESETS[key].name}</div>
+                        {suggestion}
                       </button>
                     ))}
                   </div>
@@ -794,154 +883,255 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
               </div>
             </div>
 
-            {/* Number of Variations */}
-            <div>
-              <label className="block text-xs font-medium text-white/50 mb-1.5">
-                Variations: {numOutputs}
-              </label>
-              <div className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08]">
-                <input
-                  type="range"
-                  min="1"
-                  max="4"
-                  value={numOutputs}
-                  onChange={(e) => setNumOutputs(parseInt(e.target.value))}
-                  className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
-                  disabled={state.loading}
-                  title="Number of variations to generate"
-                  aria-label="Number of variations"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Error Message */}
-          {state.error && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-              <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              <p className="text-xs text-red-400 flex-1">{state.error}</p>
-              <button 
-                onClick={() => setState(prev => ({ ...prev, error: null }))} 
-                className="text-red-400/50 hover:text-red-400"
-                title="Dismiss error"
-                aria-label="Dismiss error"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
-
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerate}
-            disabled={state.loading || !prompt.trim() || !apiKey}
-            className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all ${
-              state.loading || !prompt.trim() || !apiKey
-                ? 'bg-white/[0.06] text-white/25 cursor-not-allowed'
-                : 'bg-white text-black hover:bg-white/90'
-            }`}
-          >
-            {state.loading ? (
-              <>
-                <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-                <span>Generating...</span>
-              </>
-            ) : (
-              <>
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
-                </svg>
-                <span>Generate</span>
-              </>
-            )}
-          </button>
-
-          {/* Loading State */}
-          {state.loading && (
-            <div className="relative aspect-[4/3] rounded-lg overflow-hidden bg-white/[0.02] border border-white/[0.06]">
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
-                <div className="relative w-10 h-10">
-                  <div className="absolute inset-0 rounded-full border border-white/10"></div>
-                  <div className="absolute inset-0 rounded-full border border-transparent border-t-white/60 animate-spin"></div>
+            {/* Style and Variations Row */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Style Selector */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">
+                  Style
+                </label>
+                <div className="relative" ref={styleDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setShowStyleDropdown(!showStyleDropdown)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white text-sm hover:bg-white/[0.06] transition-colors"
+                    disabled={state.loading}
+                  >
+                    <span>{AI_STYLE_PRESETS[style].name}</span>
+                    <svg className={`w-3.5 h-3.5 text-white/40 transition-transform ${showStyleDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  
+                  {showStyleDropdown && (
+                    <div className="absolute top-full left-0 mt-1 w-full bg-[#222] border border-white/[0.08] rounded-lg shadow-xl z-50 overflow-hidden max-h-52 overflow-y-auto">
+                      {(Object.keys(AI_STYLE_PRESETS) as AIStylePreset[]).map((key) => (
+                        <button
+                          key={key}
+                          onClick={() => {
+                            setStyle(key);
+                            setShowStyleDropdown(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left transition-colors ${
+                            style === key 
+                              ? 'bg-white/[0.08] text-white' 
+                              : 'text-white/60 hover:bg-white/[0.04] hover:text-white'
+                          }`}
+                        >
+                          <div className="text-sm">{AI_STYLE_PRESETS[key].name}</div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="text-center">
-                  <p className="text-white/50 text-sm">Creating your texture...</p>
-                  <p className="text-white/30 text-xs mt-0.5">~15-30 seconds</p>
+              </div>
+
+              {/* Number of Variations */}
+              <div>
+                <label className="block text-xs font-medium text-white/50 mb-1.5">
+                  Variations: {numOutputs}
+                </label>
+                <div className="px-3 py-2 rounded-lg bg-white/[0.04] border border-white/[0.08]">
+                  <input
+                    type="range"
+                    min="1"
+                    max="4"
+                    value={numOutputs}
+                    onChange={(e) => setNumOutputs(parseInt(e.target.value))}
+                    className="w-full h-1.5 bg-white/10 rounded-full appearance-none cursor-pointer accent-white"
+                    disabled={state.loading}
+                    title="Number of variations to generate"
+                    aria-label="Number of variations"
+                  />
                 </div>
               </div>
             </div>
-          )}
 
-          {/* Generated Images Grid */}
-          {state.images.length > 0 && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-white/50">Results</span>
-                <button
-                  onClick={handleGenerate}
-                  disabled={state.loading}
-                  className="flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors"
+            {/* Error Message */}
+            {state.error && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20">
+                <svg className="w-4 h-4 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-xs text-red-400 flex-1">{state.error}</p>
+                <button 
+                  onClick={() => setState(prev => ({ ...prev, error: null }))} 
+                  className="text-red-400/50 hover:text-red-400"
+                  title="Dismiss error"
+                  aria-label="Dismiss error"
                 >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
-                  <span>Regenerate</span>
                 </button>
               </div>
-              
-              <div className={`grid gap-2 ${state.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                {state.images.map((img, index) => (
-                  <button
-                    key={index}
-                    onClick={() => setState(prev => ({ ...prev, selectedIndex: index }))}
-                    className={`relative aspect-square rounded-lg overflow-hidden border transition-all ${
-                      state.selectedIndex === index
-                        ? 'border-white/40 ring-1 ring-white/20'
-                        : 'border-white/[0.08] hover:border-white/20'
-                    }`}
-                    title={`Select design variation ${index + 1}`}
-                    aria-label={`Select design variation ${index + 1}`}
-                  >
-                    <img
-                      src={img}
-                      alt={`Generated design ${index + 1}`}
-                      className="w-full h-full object-contain bg-[#111]"
-                    />
-                    {state.selectedIndex === index && (
-                      <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-white flex items-center justify-center">
-                        <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-                        </svg>
-                      </div>
-                    )}
-                  </button>
-                ))}
-              </div>
+            )}
 
-              {/* Add to Design Button */}
+            {/* Generate Button */}
+            <button
+              onClick={handleGenerate}
+              disabled={state.loading || !prompt.trim()}
+              className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all ${
+                state.loading || !prompt.trim()
+                  ? 'bg-white/[0.06] text-white/25 cursor-not-allowed'
+                  : 'bg-white text-black hover:bg-white/90'
+              }`}
+            >
+              {state.loading ? (
+                <>
+                  <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                  <span>Generating...</span>
+                </>
+              ) : (
+                <>
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" />
+                  </svg>
+                  <span>Generate {credits && credits.credits > 0 && `(1 credit)`}</span>
+                </>
+              )}
+            </button>
+
+            {/* Loading State */}
+            {state.loading && (
+              <div className="relative aspect-[4/3] rounded-lg overflow-hidden bg-white/[0.02] border border-white/[0.06]">
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                  <div className="relative w-10 h-10">
+                    <div className="absolute inset-0 rounded-full border border-white/10"></div>
+                    <div className="absolute inset-0 rounded-full border border-transparent border-t-white/60 animate-spin"></div>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-white/50 text-sm">Creating your texture...</p>
+                    <p className="text-white/30 text-xs mt-0.5">~15-30 seconds</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Generated Images Grid */}
+            {state.images.length > 0 && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-white/50">Results</span>
+                  <button
+                    onClick={handleGenerate}
+                    disabled={state.loading || !credits || credits.credits <= 0}
+                    className="flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors disabled:opacity-50"
+                  >
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    <span>Regenerate</span>
+                  </button>
+                </div>
+                
+                <div className={`grid gap-2 ${state.images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                  {state.images.map((img, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setState(prev => ({ ...prev, selectedIndex: index }))}
+                      className={`relative aspect-square rounded-lg overflow-hidden border transition-all ${
+                        state.selectedIndex === index
+                          ? 'border-white/40 ring-1 ring-white/20'
+                          : 'border-white/[0.08] hover:border-white/20'
+                      }`}
+                      title={`Select design variation ${index + 1}`}
+                      aria-label={`Select design variation ${index + 1}`}
+                    >
+                      <img
+                        src={img}
+                        alt={`Generated design ${index + 1}`}
+                        className="w-full h-full object-contain bg-[#111]"
+                      />
+                      {state.selectedIndex === index && (
+                        <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                          <svg className="w-3 h-3 text-black" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                          </svg>
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Add to Design Button */}
+                <button
+                  onClick={handleAddToDesign}
+                  disabled={state.selectedIndex === null}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all ${
+                    state.selectedIndex === null
+                      ? 'bg-white/[0.06] text-white/25 cursor-not-allowed'
+                      : 'bg-blue-500 text-white hover:bg-blue-400'
+                  }`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                  <span>Add to Canvas</span>
+                </button>
+              </div>
+            )}
+
+            {/* Top Up Credits Section */}
+            <div className="pt-3 border-t border-white/[0.06]" data-purchase-section>
               <button
-                onClick={handleAddToDesign}
-                disabled={state.selectedIndex === null}
-                className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-lg font-medium text-sm transition-all ${
-                  state.selectedIndex === null
-                    ? 'bg-white/[0.06] text-white/25 cursor-not-allowed'
-                    : 'bg-blue-500 text-white hover:bg-blue-400'
-                }`}
+                onClick={() => setShowTopUp(!showTopUp)}
+                className="w-full flex items-center justify-between text-xs text-white/40 hover:text-white/60 transition-colors"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                <span>Need more credits?</span>
+                <svg className={`w-3.5 h-3.5 transition-transform ${showTopUp ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
-                <span>Add to Canvas</span>
               </button>
+              
+              {showTopUp && (
+                <div className="mt-3 space-y-2">
+                  {purchaseError && (
+                    <div className="flex items-center gap-2 p-2 rounded-lg bg-red-500/10 border border-red-500/20">
+                      <svg className="w-3.5 h-3.5 text-red-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <p className="text-[10px] text-red-400 flex-1">{purchaseError}</p>
+                    </div>
+                  )}
+                  {CREDIT_PACKAGES.map((pkg) => (
+                    <button
+                      key={pkg.id}
+                      onClick={() => handlePurchase(pkg.id)}
+                      disabled={purchaseLoading}
+                      className={`w-full p-2.5 rounded-lg border transition-all text-left ${
+                        pkg.popular
+                          ? 'border-blue-500/50 bg-blue-500/5'
+                          : 'border-white/[0.06] bg-white/[0.02] hover:border-white/15'
+                      } ${purchaseLoading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-[1.01]'}`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white text-sm">{pkg.credits} credits</span>
+                          {pkg.popular && (
+                            <span className="px-1 py-0.5 text-[9px] font-medium bg-blue-500 text-white rounded">
+                              BEST
+                            </span>
+                          )}
+                          <span className="text-[10px] text-white/30">${(pkg.price / pkg.credits).toFixed(2)}/credit</span>
+                        </div>
+                        {purchaseLoading && purchasePackageId === pkg.id ? (
+                          <svg className="w-3.5 h-3.5 text-white/50 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                          </svg>
+                        ) : (
+                          <span className="text-sm font-medium text-white">${pkg.price}</span>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
