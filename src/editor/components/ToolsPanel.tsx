@@ -407,28 +407,34 @@ export const ToolsPanel = ({ openAIDialogOnMount, onAIDialogOpened }: ToolsPanel
         {/* Tool Buttons */}
         <div className="flex-1 p-2 space-y-1.5 overflow-y-auto overflow-x-hidden scrollbar-thin">
           {tools.map((tool) => {
-            // AI Textures tool uses custom tooltip, not MUI
+            // AI Textures tool uses both MUI tooltip and custom tooltip
             if (tool.id === 'ai-textures') {
               return (
-                <button
+                <Tooltip 
                   key={tool.id}
-                  ref={aiToolButtonRef}
-                  onClick={() => {
-                    handleToolSelect(tool.id);
-                    if (showAITooltip) {
-                      handleDismissTooltip();
-                    }
-                  }}
-                  className={`w-full p-2 rounded-lg transition-all duration-200 flex items-center justify-center ${
-                    isAIGeneratorDialogOpen
-                      ? 'bg-blue-500/20 text-blue-400'
-                      : showAITooltip
-                      ? 'bg-blue-500/25 text-blue-400 ring-1 ring-blue-400/50'
-                      : 'text-tesla-gray hover:text-blue-400 hover:bg-blue-500/10'
-                  }`}
+                  title={`${tool.label} (${tool.shortcut})`} 
+                  placement="right" 
+                  arrow
                 >
-                  {tool.icon}
-                </button>
+                  <button
+                    ref={aiToolButtonRef}
+                    onClick={() => {
+                      handleToolSelect(tool.id);
+                      if (showAITooltip) {
+                        handleDismissTooltip();
+                      }
+                    }}
+                    className={`w-full p-2 rounded-lg transition-all duration-200 flex items-center justify-center ${
+                      isAIGeneratorDialogOpen
+                        ? 'bg-blue-500/20 text-blue-400'
+                        : showAITooltip
+                        ? 'bg-blue-500/25 text-blue-400 ring-1 ring-blue-400/50'
+                        : 'text-tesla-gray hover:text-blue-400 hover:bg-blue-500/10'
+                    }`}
+                  >
+                    {tool.icon}
+                  </button>
+                </Tooltip>
               );
             }
             
