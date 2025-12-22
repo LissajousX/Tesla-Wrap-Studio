@@ -3,6 +3,7 @@ import { useEditorStore } from '../state/useEditorStore';
 import { carModels } from '../../data/carModels';
 import { getVehicleImageUrl } from '../../utils/assets';
 import { clearAllSavedState } from '../../utils/localStorageProject';
+import Tooltip from '@mui/material/Tooltip';
 
 interface NewProjectDialogProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ const factoryColors = [
 
 export const NewProjectDialog = ({ isOpen, onClose }: NewProjectDialogProps) => {
   const [selectedModelId, setSelectedModelId] = useState<string | null>(null);
-  const [selectedColor, setSelectedColor] = useState('#F5F5F5');
+  const [selectedColor, setSelectedColor] = useState('#F5F5F0'); // Pearl White Multi-Coat
   const [customColor, setCustomColor] = useState('#3B82F6');
   const [projectName, setProjectNameLocal] = useState('');
   
@@ -160,63 +161,66 @@ export const NewProjectDialog = ({ isOpen, onClose }: NewProjectDialogProps) => 
             <label className="block text-xs font-medium text-white/60 mb-2">Base Color</label>
             <div className="flex gap-1.5">
               {factoryColors.map((c) => (
-                <button
-                  key={c.color}
-                  onClick={() => handleSelectColor(c.color)}
-                  className={`w-8 h-8 rounded-lg transition-all duration-150 focus:outline-none ${
-                    selectedColor === c.color
-                      ? 'ring-2 ring-tesla-red ring-offset-2 ring-offset-[#1c1c1e] scale-105'
-                      : 'ring-1 ring-white/10 hover:scale-105'
-                  }`}
-                  style={{ backgroundColor: c.color }}
-                  title={c.name}
-                >
-                  {selectedColor === c.color && (
-                    <svg 
-                      className={`w-4 h-4 mx-auto ${
-                        c.color === '#FFFFFF' || c.color === '#F5F5F5' || c.color === '#E8E8E8' 
-                          ? 'text-black/50' 
-                          : 'text-white/90'
-                      }`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  )}
-                </button>
+                <Tooltip key={c.color} title={c.name} placement="top" arrow>
+                  <button
+                    onClick={() => handleSelectColor(c.color)}
+                    className={`w-8 h-8 rounded-lg transition-all duration-150 focus:outline-none ${
+                      selectedColor === c.color
+                        ? 'ring-2 ring-tesla-red ring-offset-2 ring-offset-[#1c1c1e] scale-105'
+                        : 'ring-1 ring-white/10 hover:scale-105'
+                    }`}
+                    style={{ backgroundColor: c.color }}
+                    aria-label={c.name}
+                  >
+                    {selectedColor === c.color && (
+                      <svg 
+                        className={`w-4 h-4 mx-auto ${
+                          c.color === '#FFFFFF' || c.color === '#F5F5F5' || c.color === '#F5F5F0' || c.color === '#E8E8E8' || c.color === '#A6A6A6'
+                            ? 'text-black/50' 
+                            : 'text-white/90'
+                        }`} 
+                        fill="none" 
+                        stroke="currentColor" 
+                        viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </button>
+                </Tooltip>
               ))}
               {/* Custom color picker */}
-              <label className="relative cursor-pointer">
-                <input
-                  type="color"
-                  value={isCustomColor ? selectedColor : customColor}
-                  onChange={(e) => handleCustomColorChange(e.target.value)}
-                  className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
-                />
-                <div 
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 ${
-                    isCustomColor
-                      ? 'ring-2 ring-tesla-red ring-offset-2 ring-offset-[#1c1c1e] scale-105'
-                      : 'ring-1 ring-white/10 hover:scale-105'
-                  }`}
-                  style={{ 
-                    background: isCustomColor 
-                      ? selectedColor 
-                      : 'conic-gradient(from 0deg, red, yellow, lime, aqua, blue, magenta, red)'
-                  }}
-                  title="Custom Color"
-                >
-                  {isCustomColor ? (
-                    <svg className="w-4 h-4 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : (
-                    <div className="w-3 h-3 bg-[#1c1c1e] rounded-full" />
-                  )}
-                </div>
-              </label>
+              <Tooltip title="Custom Color" placement="top" arrow>
+                <label className="relative cursor-pointer">
+                  <input
+                    type="color"
+                    value={isCustomColor ? selectedColor : customColor}
+                    onChange={(e) => handleCustomColorChange(e.target.value)}
+                    className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                    aria-label="Custom color"
+                  />
+                  <div 
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-150 ${
+                      isCustomColor
+                        ? 'ring-2 ring-tesla-red ring-offset-2 ring-offset-[#1c1c1e] scale-105'
+                        : 'ring-1 ring-white/10 hover:scale-105'
+                    }`}
+                    style={{ 
+                      background: isCustomColor 
+                        ? selectedColor 
+                        : 'conic-gradient(from 0deg, red, yellow, lime, aqua, blue, magenta, red)'
+                    }}
+                  >
+                    {isCustomColor ? (
+                      <svg className="w-4 h-4 text-white/90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <div className="w-3 h-3 bg-[#1c1c1e] rounded-full" />
+                    )}
+                  </div>
+                </label>
+              </Tooltip>
             </div>
           </div>
         </div>

@@ -843,41 +843,42 @@ export const EditorCanvas = forwardRef<StageType | null, EditorCanvasProps>(({ o
           </Layer>
           </Stage>
           
-          {/* Right-Click Hint Overlay */}
-          {showRightClickHint && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-50">
-              <div className="relative bg-[#1c1c1e] border border-white/20 rounded-xl p-4 shadow-2xl max-w-sm mx-4 pointer-events-auto">
-                {/* Close button */}
-                <button
-                  onClick={handleDismissHint}
-                  className="absolute top-2 right-2 p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
-                  aria-label="Dismiss hint"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-                
-                {/* Content */}
-                <div className="pr-6">
-                  <div className="flex items-center gap-2 mb-2">
-                    <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
-                    </svg>
-                    <h3 className="text-white font-semibold text-sm">Right-Click for Options</h3>
-                  </div>
-                  <p className="text-white/70 text-xs leading-relaxed">
-                    Right-click on any layer to access quick actions like duplicate, copy, paste, and more.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
           </div>
         </div>
         <BrushTool stageRef={stageRef} />
         <FillTool stageRef={stageRef} />
       </div>
+
+      {/* Right-Click Hint Tooltip - Bottom Left */}
+      {showRightClickHint && (
+        <div className="absolute bottom-3 left-3 z-50">
+          <div className="relative bg-[#1c1c1e]/95 backdrop-blur-sm border border-white/20 rounded-xl p-4 shadow-2xl max-w-sm">
+            {/* Close button */}
+            <button
+              onClick={handleDismissHint}
+              className="absolute top-2 right-2 p-1 rounded-lg hover:bg-white/10 text-white/50 hover:text-white transition-colors"
+              aria-label="Dismiss hint"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* Content */}
+            <div className="pr-6">
+              <div className="flex items-center gap-2 mb-2">
+                <svg className="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122" />
+                </svg>
+                <h3 className="text-white font-semibold text-sm">Right-Click for Options</h3>
+              </div>
+              <p className="text-white/70 text-xs leading-relaxed">
+                Right-click on any layer to access quick actions like duplicate, copy, paste, and more.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Floating Zoom Controls */}
       <div className="absolute bottom-3 right-3 bg-tesla-black/80 backdrop-blur-xl border border-tesla-dark/40 rounded-full px-3 py-1.5 flex items-center gap-2 shadow-xl">

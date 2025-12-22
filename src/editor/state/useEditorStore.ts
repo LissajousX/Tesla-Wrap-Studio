@@ -134,13 +134,13 @@ export const useEditorStore = create<EditorStore>((set, get) => {
   return {
     layers: [],
     selectedLayerId: null,
-    baseColor: '#ffffff',
+    baseColor: '#F5F5F0', // Tesla Pearl White Multi-Coat
     currentModelId: carModels[0].id,
     templateDimensions: null,
     templateImage: null,
     activeTool: 'select' as ToolType,
     brushSettings: { ...defaultBrushSettings },
-    history: [createHistorySnapshot([], '#ffffff')],
+    history: [createHistorySnapshot([], '#F5F5F0')], // Tesla Pearl White Multi-Coat
     historyIndex: 0,
     maxHistorySize: 50,
     isDirty: false,
@@ -367,8 +367,8 @@ export const useEditorStore = create<EditorStore>((set, get) => {
       set({
         layers: [],
         selectedLayerId: null,
-        baseColor: '#ffffff',
-        history: [createHistorySnapshot([], '#ffffff')],
+        baseColor: '#F5F5F0', // Tesla Pearl White Multi-Coat
+        history: [createHistorySnapshot([], '#F5F5F0')],
         historyIndex: 0,
         isDirty: false,
         projectName: 'Untitled Project',
