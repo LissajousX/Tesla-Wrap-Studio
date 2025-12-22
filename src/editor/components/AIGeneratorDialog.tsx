@@ -303,14 +303,6 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
   };
 
   /**
-   * Get comprehensive negative prompt to avoid unwanted outputs
-   * Very explicit about NOT generating cars or 3D objects
-   */
-  const getNegativePrompt = (): string => {
-    return 'car, vehicle, automobile, tesla, 3D, 3D render, 3D model, perspective, depth, object, shape, form, structure, wheels, tires, headlights, windows, mirrors, bumper, photograph, photo, image of car, car image, vehicle image, automotive, transportation, road, street, background, scene, environment, text, words, letters, logo, watermark, blurry, low quality, pixelated, distorted, illustration, drawing, sketch, cartoon, anime, sticker, decal, badge, wrap, vinyl wrap, car wrap, vehicle wrap';
-  };
-
-  /**
    * Apply template mask to a generated image
    */
   const applyMask = useCallback(async (imageUrl: string): Promise<string> => {
@@ -349,52 +341,6 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
    * Sleep helper
    */
   const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-  /**
-   * Make API request with retry logic for rate limits
-   */
-  const fetchWithRetry = async (
-    url: string, 
-    options: RequestInit, 
-    maxRetries: number = 3
-  ): Promise<Response> => {
-    let lastError: Error | null = null;
-    
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const response = await fetch(url, options);
-        
-        if (response.status === 429) {
-          // Rate limited - extract wait time from error
-          const errorData = await response.json().catch(() => ({}));
-          const waitMatch = errorData.detail?.match(/resets in ~(\d+)s/);
-          const waitTime = waitMatch ? parseInt(waitMatch[1]) * 1000 : (attempt + 1) * 2000;
-          
-          
-          // Update state to show waiting
-          setState(prev => ({
-            ...prev,
-            error: `Rate limited. Retrying in ${Math.ceil(waitTime / 1000)}s... (${attempt + 1}/${maxRetries})`,
-          }));
-          
-          await sleep(waitTime + 500); // Add a small buffer
-          continue;
-        }
-        
-        // Clear rate limit error on success
-        setState(prev => prev.error?.includes('Rate limited') ? { ...prev, error: null } : prev);
-        return response;
-        
-      } catch (error) {
-        lastError = error instanceof Error ? error : new Error('Network error');
-        if (attempt < maxRetries - 1) {
-          await sleep((attempt + 1) * 1000);
-        }
-      }
-    }
-    
-    throw lastError || new Error('Max retries exceeded');
-  };
 
   /**
    * Poll for prediction completion via Supabase Edge Function
@@ -481,7 +427,6 @@ export const AIGeneratorDialog = ({ isOpen, onClose }: AIGeneratorDialogProps) =
       
       // Build the full prompt
       const fullPrompt = buildPrompt(prompt.trim(), style);
-      const negativePrompt = getNegativePrompt();
       
       // Flux Schnell - fast text-to-image generation via Supabase Edge Function
       const { data: predictionData, error: createError } = await supabase.functions.invoke(

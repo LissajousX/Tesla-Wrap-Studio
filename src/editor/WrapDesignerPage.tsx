@@ -30,7 +30,7 @@ export const WrapDesignerPage = () => {
   const [autoFit, setAutoFit] = useState(true);
   const { selectedLayerId, deleteLayer, undo, redo, updateLayer, layers, loadProject, setDesignId, isDirty, getSerializedState } = useEditorStore();
   const { user, loading: authLoading } = useAuth();
-  const [loadingDesign, setLoadingDesign] = useState(false);
+  const [_loadingDesign, setLoadingDesign] = useState(false);
   const [pendingDesignId, setPendingDesignId] = useState<string | null>(null);
   const [showUnsavedChangesDialog, setShowUnsavedChangesDialog] = useState(false);
   const [openAIDialogOnMount, setOpenAIDialogOnMount] = useState(false);
