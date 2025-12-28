@@ -255,6 +255,103 @@
 		var setStatusMode;
 		var setStatusNotice;
 
+		// IndexedDB caching for .pck files
+		// Pack version - increment this when pack is updated to invalidate cache
+		const PACK_VERSION = '1.0.0';
+		
+		(function() {
+			const DB_NAME = 'tesla-wrap-godot-cache';
+			const DB_VERSION = 1;
+			const STORE_NAME = 'pck-files';
+
+			function openDB() {
+				return new Promise(function(resolve, reject) {
+					var request = indexedDB.open(DB_NAME, DB_VERSION);
+					request.onerror = function() { reject(request.error); };
+					request.onsuccess = function() { resolve(request.result); };
+					request.onupgradeneeded = function(event) {
+						var db = event.target.result;
+						if (!db.objectStoreNames.contains(STORE_NAME)) {
+							var store = db.createObjectStore(STORE_NAME, { keyPath: 'url' });
+							store.createIndex('cachedAt', 'cachedAt', { unique: false });
+							store.createIndex('version', 'version', { unique: false });
+						}
+					};
+				});
+			}
+
+			window.godotCache = {
+				getCachedPack: function(url, version) {
+					return openDB().then(function(db) {
+						return new Promise(function(resolve) {
+							var transaction = db.transaction([STORE_NAME], 'readonly');
+							var store = transaction.objectStore(STORE_NAME);
+							var request = store.get(url);
+							request.onsuccess = function() {
+								var cached = request.result;
+								if (cached && cached.version === version) {
+									console.log('[GodotCache] Cache hit for ' + url);
+									resolve(cached.data);
+								} else {
+									if (cached && cached.version !== version) {
+										console.log('[GodotCache] Cache miss - version mismatch (cached: ' + cached.version + ', required: ' + version + ')');
+									} else {
+										console.log('[GodotCache] Cache miss for ' + url);
+									}
+									resolve(null);
+								}
+							};
+							request.onerror = function() { resolve(null); };
+						});
+					}).catch(function() { return null; });
+				},
+
+				cachePack: function(url, version, data) {
+					return openDB().then(function(db) {
+						return new Promise(function(resolve, reject) {
+							var transaction = db.transaction([STORE_NAME], 'readwrite');
+							var store = transaction.objectStore(STORE_NAME);
+							var cached = {
+								url: url,
+								version: version,
+								data: data,
+								cachedAt: Date.now(),
+								size: data.size
+							};
+							var request = store.put(cached);
+							request.onsuccess = function() {
+								console.log('[GodotCache] Cached ' + url + ' (' + (data.size / 1024 / 1024).toFixed(2) + 'MB)');
+								resolve();
+							};
+							request.onerror = function() { reject(request.error); };
+						});
+					}).catch(function(err) {
+						console.warn('[GodotCache] Failed to cache:', err);
+					});
+				},
+
+				downloadPack: function(url, version) {
+					var self = this;
+					return this.getCachedPack(url, version).then(function(cached) {
+						if (cached) {
+							return cached;
+						}
+						console.log('[GodotCache] Downloading ' + url + '...');
+						return fetch(url).then(function(response) {
+							if (!response.ok) {
+								throw new Error('Failed to download pack: ' + response.statusText);
+							}
+							return response.blob();
+						}).then(function(blob) {
+							// Cache in background (don't wait)
+							self.cachePack(url, version, blob).catch(function() {});
+							return blob;
+						});
+					});
+				}
+			};
+		})();
+
 		(function() {
 			const EXECUTABLE_NAME = 'index';
 			
@@ -421,20 +518,55 @@
 				}
 			};
 
+			// Load pack with IndexedDB caching
+			function loadPackWithCache() {
+				// Only use cache for remote URLs, not local files
+				if (pckFromUrl && pckFromUrl.startsWith('http')) {
+					window.godotCache.downloadPack(pckFromUrl, PACK_VERSION).then(function(blob) {
+						// Create object URL from cached/downloaded blob
+						var packUrl = URL.createObjectURL(blob);
+						engine.setCanvas(canvas);
+						engine.startGame(EXECUTABLE_NAME, packUrl).then(function() {
+							setStatusMode('hidden');
+							initializing = false;
+							console.log('[Godot] Engine started successfully');
+							// Notify React that engine is ready
+							if (window.parent && window.parent !== window) {
+								window.parent.postMessage({ type: 'godot_ready', version: '1.0' }, '*');
+							}
+						}, displayFailureNotice);
+					}).catch(function(err) {
+						console.warn('[Godot] Cache download failed, trying direct load:', err);
+						// Fallback to direct load if cache fails
+						engine.setCanvas(canvas);
+						engine.startGame(EXECUTABLE_NAME, MAIN_PACK).then(function() {
+							setStatusMode('hidden');
+							initializing = false;
+							console.log('[Godot] Engine started successfully (direct load)');
+							if (window.parent && window.parent !== window) {
+								window.parent.postMessage({ type: 'godot_ready', version: '1.0' }, '*');
+							}
+						}, displayFailureNotice);
+					});
+				} else {
+					// Local file, no caching needed
+					engine.setCanvas(canvas);
+					engine.startGame(EXECUTABLE_NAME, MAIN_PACK).then(function() {
+						setStatusMode('hidden');
+						initializing = false;
+						console.log('[Godot] Engine started successfully');
+						if (window.parent && window.parent !== window) {
+							window.parent.postMessage({ type: 'godot_ready', version: '1.0' }, '*');
+						}
+					}, displayFailureNotice);
+				}
+			}
+
 			if (!Engine.isWebGLAvailable()) {
 				displayFailureNotice('WebGL not available');
 			} else {
 				setStatusMode('indeterminate');
-				engine.setCanvas(canvas);
-				engine.startGame(EXECUTABLE_NAME, MAIN_PACK).then(() => {
-					setStatusMode('hidden');
-					initializing = false;
-					console.log('[Godot] Engine started successfully');
-					// Notify React that engine is ready
-					if (window.parent && window.parent !== window) {
-						window.parent.postMessage({ type: 'godot_ready', version: '1.0' }, '*');
-					}
-				}, displayFailureNotice);
+				loadPackWithCache();
 			}
 		})();
 	//]]></script>
