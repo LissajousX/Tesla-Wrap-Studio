@@ -27,3 +27,5 @@ dist-ssr
 .env.local
 
 *.pck
+
+public/godot/index.pck

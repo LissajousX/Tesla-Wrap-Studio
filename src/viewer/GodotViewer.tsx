@@ -32,8 +32,9 @@ interface GodotViewerProps {
   stageRef: React.RefObject<StageType | null>;
 }
 
-// Public URL for the .pck file in Cloudflare R2
-const PCK_URL = 'https://lfs.tesla-wrap.com/index.pck';
+// Local URL for the .pck file served from public/godot/index.pck
+// 将 index.pck 放在项目的 public/godot/index.pck，构建后会出现在 dist/godot/index.pck
+const PCK_URL = '/godot/index.pck';
 
 // Local storage key for first-time hint
 const VIEWER_HINT_SHOWN_KEY = 'tesla-wrap-viewer-hint-shown';
